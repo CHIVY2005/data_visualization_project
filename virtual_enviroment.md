@@ -13,6 +13,10 @@ hoặc
 py -3.13 -m venv .venv
 ```
 
+```bash
+py -3.11 -m venv .venv
+```
+
 ### Kích hoạt môi trường (Windows)
 ```bash
 .\.venv\Scripts\activate

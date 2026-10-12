@@ -1,0 +1,42 @@
+{
+  "dataset": "ETTh1",
+  "target": "OT",
+  "fitted_on": "train",
+  "train_rows": 8640,
+  "features": {
+    "HUFL": {
+      "mean": 7.937742,
+      "std": 5.812749
+    },
+    "HULL": {
+      "mean": 2.021039,
+      "std": 2.090105
+    },
+    "MUFL": {
+      "mean": 5.079771,
+      "std": 5.518794
+    },
+    "MULL": {
+      "mean": 0.746186,
+      "std": 1.926379
+    },
+    "LUFL": {
+      "mean": 2.781762,
+      "std": 1.023523
+    },
+    "LULL": {
+      "mean": 0.788453,
+      "std": 0.630237
+    },
+    "OT": {
+      "mean": 17.128262,
+      "std": 9.176491
+    }
+  },
+  "metadata": {
+    "seed": 2026,
+    "created_at": "2026-10-12T06:19:25Z",
+    "critical_threshold_95c": 95.0,
+    "warning_threshold_80c": 80.0
+  }
+}
