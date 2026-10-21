@@ -1,0 +1,4 @@
+﻿Buoc_xu_ly,Chi_tiet,So_luong
+Kiểm tra ngày giờ,Cột date: giá trị sai định dạng,0.0
+Xử lý trùng lặp,Giữ bản ghi đầu tiên,0.0
+Chọn lọc thuộc tính,"Các cột được giữ lại: ['date', 'HUFL', 'HULL', 'MUFL', 'MULL', 'LUFL', 'LULL', 'OT', 'hour', 'day_of_week', 'day', 'month', 'HUFL_scaled', 'HULL_scaled', 'MUFL_scaled', 'MULL_scaled', 'LUFL_scaled', 'LULL_scaled', 'OT_scaled']",
