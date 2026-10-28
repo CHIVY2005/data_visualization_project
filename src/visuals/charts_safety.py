@@ -1,20 +1,16 @@
-"""T0401: OT Threshold Monitoring Chart with 85°C/95°C Regimes for US-02.
+"""T0401: Safety & Risk Monitor Chart Modules (US-02).
 
-What:  Line chart of Oil Temperature (OT) across time with horizontal threshold lines
-       at 85°C (Warning) and 95°C (Critical), background hazard shading, and pop-out
-       breach markers.
-Why:   Safety & Risk Monitor (US-02) needs to instantly identify when and where OT
-       approached or exceeded thermal limits and inspect breach severity.
-How:   Plotly graph_objects Figure with Navy OT trajectory, Amber dashed 85°C line,
-       Crimson dashed 95°C line, semi-transparent background shading for Warning [85, 95)
-       and Critical [95, max] zones, and pop-out scatter markers for breach events.
+Artifact: src/visuals/charts_safety.py
+Implements:
+  - T0401a: build_ot_threshold_chart (OT line chart with 85°C/95°C hazard bands,
+            pop-out breach markers, and shaded breach spans)
+  - T0401b: build_barcode_rug (Temporal barcode/rug plot of thermal breach events)
 
 Input contract:
-  frame: pd.DataFrame with at least ['timestamp', 'OT']
-  events_df (optional): pd.DataFrame from breach_events.parquet with
-      ['start_timestamp', 'end_timestamp', 'threshold_c', 'peak_ot', 'duration_hours']
+  - grid_features.parquet for OT Threshold Chart
+  - breach_events.parquet for Barcode Rug Plot & shaded spans
 Output:
-  plotly.graph_objects.Figure — self-contained, no UI compute, <2s render.
+  - plotly.graph_objects.Figure — CPU-only, responsive, <2s render SLA.
 """
 
 from __future__ import annotations
@@ -37,6 +33,10 @@ _BG_WARN = "rgba(217, 119, 6, 0.12)"   # Warning band fill
 _BG_CRIT = "rgba(220, 38, 38, 0.18)"   # Critical band fill
 
 
+# ---------------------------------------------------------------------------
+# T0401a: OT Threshold Monitoring Chart
+# ---------------------------------------------------------------------------
+
 def build_ot_threshold_chart(
     frame: pd.DataFrame,
     events_df: pd.DataFrame | None = None,
@@ -45,32 +45,9 @@ def build_ot_threshold_chart(
     width: int | None = None,
     max_points: int = 8760,
 ) -> go.Figure:
-    """Build OT threshold monitoring chart with warning and critical regimes.
-
-    Parameters
-    ----------
-    frame : pd.DataFrame
-        DataFrame containing at least 'timestamp' and 'OT'.
-    events_df : pd.DataFrame | None, default None
-        Optional DataFrame of thermal breach events with 'start_timestamp',
-        'end_timestamp', 'threshold_c', 'peak_ot'.
-    dataset_label : str, default ""
-        Dataset name for title display (e.g. 'ETTh1').
-    height : int, default 440
-        Figure height in pixels.
-    width : int | None, default None
-        Figure width in pixels (None for responsive container).
-    max_points : int, default 8760
-        Maximum time points to plot for the continuous line to ensure <2s SLA.
-        Breach points are never decimated.
-
-    Returns
-    -------
-    plotly.graph_objects.Figure
-    """
+    """Build OT threshold monitoring chart with warning and critical regimes."""
     fig = go.Figure()
 
-    # Validate inputs
     required = {"timestamp", "OT"}
     if frame is None or frame.empty or not required.issubset(frame.columns):
         fig.add_annotation(
@@ -99,11 +76,9 @@ def build_ot_threshold_chart(
         fig.update_layout(height=height, width=width)
         return fig
 
-    # Ensure timestamp is datetime
     if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
         df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-    # Determine thermal regime if not present
     if "thermal_regime" not in df.columns:
         conditions = [
             df["OT"] >= CRITICAL_TEMP_THRESHOLD,
@@ -112,7 +87,6 @@ def build_ot_threshold_chart(
         choices = ["Critical", "Warning"]
         df["thermal_regime"] = np.select(conditions, choices, default="Normal")
 
-    # Downsample background continuous line if dataset is very large
     n_points = len(df)
     if n_points > max_points:
         step = int(np.ceil(n_points / max_points))
@@ -120,7 +94,6 @@ def build_ot_threshold_chart(
     else:
         line_df = df
 
-    # Primary OT continuous line
     fig.add_trace(
         go.Scatter(
             x=line_df["timestamp"],
@@ -137,7 +110,6 @@ def build_ot_threshold_chart(
         )
     )
 
-    # Pop-out markers for Warning breach points (85°C <= OT < 95°C)
     warn_df = df[
         (df["OT"] >= WARNING_TEMP_THRESHOLD) & (df["OT"] < CRITICAL_TEMP_THRESHOLD)
     ]
@@ -162,7 +134,6 @@ def build_ot_threshold_chart(
             )
         )
 
-    # Pop-out markers for Critical breach points (OT >= 95°C)
     crit_df = df[df["OT"] >= CRITICAL_TEMP_THRESHOLD]
     if not crit_df.empty:
         fig.add_trace(
@@ -185,7 +156,6 @@ def build_ot_threshold_chart(
             )
         )
 
-    # Add shaded breach event spans if events_df is provided
     if events_df is not None and not events_df.empty:
         for _, ev in events_df.iterrows():
             th = float(ev.get("threshold_c", WARNING_TEMP_THRESHOLD))
@@ -198,13 +168,11 @@ def build_ot_threshold_chart(
                 line_width=0,
             )
 
-    # Calculate y-axis bounds
     min_ot = float(df["OT"].min())
     max_ot = float(df["OT"].max())
     y_min = max(0.0, np.floor(min_ot - 5))
     y_max = max(105.0, np.ceil(max_ot + 5))
 
-    # Add background shaded horizontal bands for Warning and Critical zones
     fig.add_hrect(
         y0=WARNING_TEMP_THRESHOLD,
         y1=CRITICAL_TEMP_THRESHOLD,
@@ -220,7 +188,6 @@ def build_ot_threshold_chart(
         line_width=0,
     )
 
-    # Add horizontal threshold reference lines
     fig.add_hline(
         y=WARNING_TEMP_THRESHOLD,
         line_dash="dash",
@@ -240,7 +207,6 @@ def build_ot_threshold_chart(
         annotation_font={"size": 11, "color": _COLOUR_CRIT, "family": "Arial-Bold"},
     )
 
-    # Action title
     n_warn = len(warn_df)
     n_crit = len(crit_df)
     prefix = f"[{dataset_label}] " if dataset_label else ""
@@ -292,6 +258,182 @@ def build_ot_threshold_chart(
         height=height,
         width=width,
         hovermode="x unified",
+    )
+
+    return fig
+
+
+# ---------------------------------------------------------------------------
+# T0401b: Barcode / Rug Plot
+# ---------------------------------------------------------------------------
+
+def build_barcode_rug(
+    events_df: pd.DataFrame | None,
+    threshold_c: float | None = None,
+    dataset_label: str = "",
+    height: int = 180,
+    width: int | None = None,
+    time_range: tuple[pd.Timestamp, pd.Timestamp] | None = None,
+) -> go.Figure:
+    """Build a Barcode/Rug plot for thermal breach incidents."""
+    fig = go.Figure()
+    prefix = f"[{dataset_label}] " if dataset_label else ""
+
+    if events_df is None or events_df.empty:
+        fig.add_annotation(
+            text="Không ghi nhận sự kiện vượt ngưỡng nhiệt độ nào (An toàn).",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font={"size": 13, "color": "#64748B"},
+        )
+        fig.update_layout(
+            title={
+                "text": f"<b>{prefix}Thanh Barcode sự cố vi phạm: Không có sự kiện</b>",
+                "x": 0.01,
+                "y": 0.95,
+                "font": {"size": 13, "color": "#1E293B"},
+            },
+            height=height,
+            width=width,
+            plot_bgcolor="#FFFFFF",
+            paper_bgcolor="#FFFFFF",
+            xaxis={"showgrid": False, "zeroline": False, "showticklabels": False},
+            yaxis={"showgrid": False, "zeroline": False, "showticklabels": False},
+        )
+        return fig
+
+    df = events_df.copy()
+
+    if threshold_c is not None:
+        df = df[df["threshold_c"] == threshold_c]
+
+    if df.empty:
+        fig.add_annotation(
+            text=f"Không có sự kiện vượt ngưỡng {threshold_c}°C.",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+            font={"size": 13, "color": "#64748B"},
+        )
+        fig.update_layout(height=height, width=width)
+        return fig
+
+    if not pd.api.types.is_datetime64_any_dtype(df["start_timestamp"]):
+        df["start_timestamp"] = pd.to_datetime(df["start_timestamp"])
+    if not pd.api.types.is_datetime64_any_dtype(df["end_timestamp"]):
+        df["end_timestamp"] = pd.to_datetime(df["end_timestamp"])
+
+    crit_events = df[df["threshold_c"] >= CRITICAL_TEMP_THRESHOLD]
+    warn_events = df[
+        (df["threshold_c"] >= WARNING_TEMP_THRESHOLD)
+        & (df["threshold_c"] < CRITICAL_TEMP_THRESHOLD)
+    ]
+
+    if not warn_events.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=warn_events["start_timestamp"],
+                y=[1] * len(warn_events),
+                mode="markers",
+                name=f"Cảnh báo ≥85°C ({len(warn_events)})",
+                marker={
+                    "color": _COLOUR_WARN,
+                    "symbol": "line-ns-open",
+                    "size": 22,
+                    "line": {"width": 2, "color": _COLOUR_WARN},
+                },
+                customdata=warn_events[
+                    ["event_id", "duration_hours", "peak_ot", "degree_hours"]
+                ],
+                hovertemplate=(
+                    "<b>SỰ KIỆN CẢNH BÁO</b><br>"
+                    "Mã: %{customdata[0]}<br>"
+                    "Bắt đầu: %{x|%Y-%m-%d %H:%M}<br>"
+                    "Thời lượng: %{customdata[1]:.2f} giờ<br>"
+                    "Đỉnh nhiệt: %{customdata[2]:.2f} °C<br>"
+                    "Áp lực nhiệt: %{customdata[3]:.2f} °C·h<extra></extra>"
+                ),
+            )
+        )
+
+    if not crit_events.empty:
+        fig.add_trace(
+            go.Scatter(
+                x=crit_events["start_timestamp"],
+                y=[2] * len(crit_events),
+                mode="markers",
+                name=f"Nguy cấp ≥95°C ({len(crit_events)})",
+                marker={
+                    "color": _COLOUR_CRIT,
+                    "symbol": "line-ns-open",
+                    "size": 26,
+                    "line": {"width": 2.5, "color": _COLOUR_CRIT},
+                },
+                customdata=crit_events[
+                    ["event_id", "duration_hours", "peak_ot", "degree_hours"]
+                ],
+                hovertemplate=(
+                    "<b>SỰ KIỆN NGUY CẤP</b><br>"
+                    "Mã: %{customdata[0]}<br>"
+                    "Bắt đầu: %{x|%Y-%m-%d %H:%M}<br>"
+                    "Thời lượng: %{customdata[1]:.2f} giờ<br>"
+                    "Đỉnh nhiệt: %{customdata[2]:.2f} °C<br>"
+                    "Áp lực nhiệt: %{customdata[3]:.2f} °C·h<extra></extra>"
+                ),
+            )
+        )
+
+    tot_events = len(df)
+    n_crit = len(crit_events)
+    n_warn = len(warn_events)
+    action_title = (
+        f"<b>{prefix}Thanh Barcode sự cố nhiệt: {tot_events:,} đợt vi phạm "
+        f"({n_crit} nguy cấp ≥95°C, {n_warn} cảnh báo ≥85°C)</b>"
+    )
+
+    xaxis_cfg: dict[str, object] = {
+        "title": "Thời gian quan sát",
+        "showgrid": True,
+        "gridcolor": _GRID_LINE,
+        "zeroline": False,
+    }
+    if time_range is not None:
+        xaxis_cfg["range"] = list(time_range)
+
+    fig.update_layout(
+        title={
+            "text": action_title,
+            "x": 0.01,
+            "y": 0.96,
+            "font": {"size": 13, "color": "#1E293B"},
+        },
+        xaxis=xaxis_cfg,
+        yaxis={
+            "tickvals": [1, 2],
+            "ticktext": ["Cảnh báo (85°C)", "Nguy cấp (95°C)"],
+            "range": [0.4, 2.6],
+            "showgrid": False,
+            "zeroline": False,
+        },
+        legend={
+            "orientation": "h",
+            "yanchor": "bottom",
+            "y": 1.02,
+            "xanchor": "right",
+            "x": 1.0,
+            "bgcolor": "rgba(255, 255, 255, 0.8)",
+        },
+        margin={"l": 110, "r": 30, "t": 45, "b": 35},
+        plot_bgcolor="#FFFFFF",
+        paper_bgcolor="#FFFFFF",
+        height=height,
+        width=width,
+        hovermode="closest",
     )
 
     return fig

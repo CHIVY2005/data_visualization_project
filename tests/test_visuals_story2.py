@@ -23,11 +23,15 @@ from src.data.constants import (
     WARNING_TEMP_THRESHOLD,
 )
 from src.data import feature_builder as fb
-from src.visuals.story2.barcode_rug import build_barcode_rug
-from src.visuals.story2.ot_threshold_chart import build_ot_threshold_chart
-from src.visuals.story2.regime_boxplots import build_regime_boxplots
-from src.visuals.story2.scatter_loess import build_scatter_loess
-from src.visuals.story2.small_multiples import build_small_multiples
+from src.visuals.charts_safety import (
+    build_barcode_rug,
+    build_ot_threshold_chart,
+)
+from src.visuals.app_safety import (
+    build_regime_boxplots,
+    build_scatter_loess,
+    build_small_multiples,
+)
 
 
 # ---------------------------------------------------------------------------

@@ -31,16 +31,20 @@ from src.data.constants import (
     LOAD_BRANCHES,
     MEASUREMENTS,
 )
-from src.visuals.story1 import (
+from src.visuals.charts_manager import (
     build_calendar_heatmap,
-    build_lag_heatmap,
     build_quantile_fan,
-    build_stacked_bar,
     build_stl_panels,
 )
-from src.visuals.story2 import (
+from src.visuals.app_manager import (
+    build_lag_heatmap,
+    build_stacked_bar,
+)
+from src.visuals.charts_safety import (
     build_barcode_rug,
     build_ot_threshold_chart,
+)
+from src.visuals.app_safety import (
     build_regime_boxplots,
     build_scatter_loess,
     build_small_multiples,
