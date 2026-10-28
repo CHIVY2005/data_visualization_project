@@ -143,7 +143,7 @@ class TestT0301CalendarHeatmap:
     @pytest.fixture(autouse=True)
     def _import(self) -> None:
         pytest.importorskip("plotly")
-        from src.visuals.story1 import calendar_heatmap as cm
+        from src.visuals import charts_manager as cm
         self.cm = cm
 
     def test_returns_figure(self) -> None:
@@ -193,7 +193,7 @@ class TestT0302STLPanels:
     @pytest.fixture(autouse=True)
     def _import(self) -> None:
         pytest.importorskip("plotly")
-        from src.visuals.story1 import stl_panels as sp
+        from src.visuals import charts_manager as sp
         self.sp = sp
 
     def test_returns_figure(self) -> None:
@@ -244,7 +244,7 @@ class TestT0302QuantileFan:
     @pytest.fixture(autouse=True)
     def _import(self) -> None:
         pytest.importorskip("plotly")
-        from src.visuals.story1 import quantile_fan as qf
+        from src.visuals import charts_manager as qf
         self.qf = qf
 
     def test_returns_figure(self) -> None:
@@ -308,7 +308,7 @@ class TestT0303StackedBar:
     @pytest.fixture(autouse=True)
     def _import(self) -> None:
         pytest.importorskip("plotly")
-        from src.visuals.story1 import stacked_bar as sb
+        from src.visuals import app_manager as sb
         self.sb = sb
 
     def test_returns_figure(self) -> None:
@@ -361,7 +361,7 @@ class TestT0303LagHeatmap:
     @pytest.fixture(autouse=True)
     def _import(self) -> None:
         pytest.importorskip("plotly")
-        from src.visuals.story1 import lag_heatmap as lh
+        from src.visuals import app_manager as lh
         self.lh = lh
 
     def test_returns_figure(self) -> None:

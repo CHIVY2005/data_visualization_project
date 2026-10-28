@@ -252,7 +252,7 @@ def render_story1(filters: dict[str, str | list[str] | None]) -> None:
     st.subheader("🗓️ T0301 — Calendar Heatmap")
     with st.expander("Xem biểu đồ", expanded=True):
         if feat_ds is not None:
-            from src.visuals.story1.calendar_heatmap import build_calendar_heatmap
+            from src.visuals.charts_manager import build_calendar_heatmap
             agg_choice = st.radio(
                 "Phép tổng hợp theo ngày",
                 options=["mean", "max", "min"],
@@ -280,7 +280,7 @@ def render_story1(filters: dict[str, str | list[str] | None]) -> None:
     st.subheader("📉 T0302 — STL Decomposition")
     with st.expander("Xem biểu đồ", expanded=False):
         if stl_df is not None:
-            from src.visuals.story1.stl_panels import build_stl_panels
+            from src.visuals.charts_manager import build_stl_panels
             stl_slice = stl_df[
                 (stl_df["dataset"] == dataset) & (stl_df["variable"] == variable)
             ]
@@ -306,7 +306,7 @@ def render_story1(filters: dict[str, str | list[str] | None]) -> None:
     st.subheader("🌀 T0302 — Hourly Quantile Fan")
     with st.expander("Xem biểu đồ", expanded=False):
         if quantile_bands is not None:
-            from src.visuals.story1.quantile_fan import build_quantile_fan
+            from src.visuals.charts_manager import build_quantile_fan
             # Filter to dataset if column exists
             qb = quantile_bands.copy()
             if "dataset" in qb.columns:
@@ -331,7 +331,7 @@ def render_story1(filters: dict[str, str | list[str] | None]) -> None:
     st.subheader("📊 T0303 — Load Composition (100% Stacked Bar)")
     with st.expander("Xem biểu đồ", expanded=False):
         if feat_ds is not None:
-            from src.visuals.story1.stacked_bar import build_stacked_bar
+            from src.visuals.app_manager import build_stacked_bar
             all_tiers = st.checkbox("Hiện cả 3 cấp áp", value=True, key="all_tiers")
             tier_choice = "High"
             if not all_tiers:
@@ -359,7 +359,7 @@ def render_story1(filters: dict[str, str | list[str] | None]) -> None:
     st.subheader("🔥 T0303 — Lag Cross-Correlation Heatmap")
     with st.expander("Xem biểu đồ", expanded=False):
         if lag_matrix is not None:
-            from src.visuals.story1.lag_heatmap import build_lag_heatmap
+            from src.visuals.app_manager import build_lag_heatmap
             lag_ds = lag_matrix.copy()
             if "dataset" in lag_ds.columns:
                 lag_ds = lag_ds[lag_ds["dataset"] == dataset]
