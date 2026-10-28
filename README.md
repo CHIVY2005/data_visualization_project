@@ -1,414 +1,296 @@
-# ⚡ Long-Sequence Time-Series Forecasting (LSTF) with Informer & Power Grid Operational Dashboard
+# ETT Power Grid Operational Management & Thermal Safety Visual Analytics Dashboard
 
-<div align="center">
+![Version](https://img.shields.io/badge/version-2.0-1E3A8A)
+![Python](https://img.shields.io/badge/Python-3.11%2B-3776AB?logo=python&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-target_stack-FF4B4B?logo=streamlit&logoColor=white)
+![Plotly](https://img.shields.io/badge/Plotly-target_stack-3F4F75?logo=plotly)
+![Status](https://img.shields.io/badge/status-architecture_defined-64748B)
+[![License: MIT](https://img.shields.io/badge/License-MIT-1E3A8A)](LICENSE)
 
-[![Project Code](https://img.shields.io/badge/Project%20Code-LSTF__INFORMER__VIS__2026-blueviolet?style=for-the-badge&logo=codewars)](https://github.com/)
-[![Python Version](https://img.shields.io/badge/Python-3.11%2B-blue?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.x%20%7C%20CUDA%20Ready-EE4C2C?style=for-the-badge&logo=pytorch&logoColor=white)](https://pytorch.org/)
-[![Streamlit](https://img.shields.io/badge/Streamlit-1.x%20Decoupled%20UI-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io/)
-[![Plotly](https://img.shields.io/badge/Plotly-Interactive%20Charts-3F4F75?style=for-the-badge&logo=plotly&logoColor=white)](https://plotly.com/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](LICENSE)
-[![Status](https://img.shields.io/badge/Status-Active%20%7C%20Sprint%20In--Progress-00C853?style=for-the-badge)](docs/project_charter/)
-[![Visual Standards](https://img.shields.io/badge/Visual%20Design-Tufte%20%26%20Gestalt%20Compliant-0284C7?style=for-the-badge)](audit/)
+**`ETT_GRID_VIS_2026` · Trực quan hóa dữ liệu & phân tích thống kê ứng dụng · CPU-only**
 
-<p align="center">
-  <strong>Hệ thống Dự báo Chuỗi thời gian Dài hạn Bằng Mô hình Học sâu Informer (AAAI-21) Tích hợp Bảng Điều khiển Trực quan hóa Giám sát An toàn Vận hành Lưới điện Thời gian thực</strong>
-</p>
+> **Trạng thái đã kiểm tra — 28/10/2026:** Repository hiện có tài liệu điều hành và khung thư mục, chưa có pipeline, artifacts hoặc dashboard chạy được. Các sơ đồ, schema và CLI bên dưới mô tả **kiến trúc đích**, không phải tính năng đã bàn giao. Badge công nghệ không chứng nhận dependency đầy đủ hoặc kiểm thử thành công.
 
-[Tổng Quan](#-tổng-quan-dự-án--động-lực-nghiên-cứu) •
-[Tính Năng & Kiến Trúc](#-tính-năng-cốt-lõi--kiến-trúc-hệ-thống) •
-[Cấu Trúc Thư Mục](#-cấu-trúc-repository) •
-[Công Nghệ](#-công-nghệ-sử-dụng-tech-stack) •
-[Cài Đặt & Chạy](#-hướng-dẫn-cài-đặt--thực-thi-quickstart) •
-[Đối Chuẩn Thực Nghiệm](#-đối-chuẩn-thực-nghiệm--kết-quả) •
-[Quản Trị Dự Án](#-quản-trị-dự-án--phân-công-raci) •
-[Tài Liệu Tham Khảo](#-tài-liệu-tham-khảo--bản-quyền)
-
-</div>
+| Tầng thông tin | Dành cho | Nội dung |
+|---|---|---|
+| [1 · Tổng quan](#overview) | Người đọc mới, bên liên quan nghiệp vụ | Bài toán, hai User Stories, luồng dữ liệu |
+| [2 · Kiến trúc & hợp đồng](#architecture) | Nhóm ETL, phân tích và giao diện | Workspace, quyền thao tác, dữ liệu, artifacts, chuẩn thị giác |
+| [3 · Thực thi & quản trị](#operations) | Người phát triển, PM và QA | Môi trường, CLI, RACI/WBS, nghiệm thu, tài liệu nguồn |
 
 ---
 
-## 📌 Tổng Quan Dự Án & Động Lực Nghiên Cứu
+<a id="overview"></a>
+## Tầng 1 — Tổng quan | Overview first
 
-### 1. Vấn Đề Thực Tế (Problem Statement)
-Trong quản lý và vận hành hạ tầng lưới điện hiện đại, **máy biến áp điện lực** là mắt xích huyết mạch. Sự biến động quá mức của phụ tải kết hợp với nhiệt độ môi trường có thể làm gia tăng nhiệt độ dầu cách điện (**Oil Temperature - OT**). Khi nhiệt độ này vượt ngưỡng vật lý an toàn **95.0°C**, nguy cơ phá vỡ lớp cách điện, gây chập cháy máy biến áp và tê liệt diện rộng hệ thống truyền tải tăng đột biến.
+### 1.1. Bài toán và tuyên ngôn giải pháp
 
-Tuy nhiên, việc dự báo chuỗi thời gian dài hạn (**Long-Sequence Time-Series Forecasting - LSTF**) đối với tải điện và nhiệt độ OT gặp phải 3 rào cản lớn:
-1. **Độ phức tạp tính toán bậc hai $O(L^2)$:** Cơ chế Self-Attention truyền thống của mô hình Transformer ngốn dung lượng bộ nhớ GPU và thời gian tính toán khổng lồ khi chiều dài chuỗi đầu vào $L$ mở rộng.
-2. **Tắc nghẽn bộ nhớ tại tầng phân cấp:** Sự tích tụ các đặc trưng chuỗi dài ở bộ mã hóa (Encoder) dẫn đến bùng nổ tài nguyên bộ nhớ khi xử lý chuỗi hàng trăm đến hàng nghìn bước.
-3. **Hiện tượng suy giảm tích lũy (Error Accumulation):** Phương pháp giải mã tự hồi quy (Autoregressive step-by-step) khiến sai số các bước đầu khuếch đại nghiêm trọng ở các khung thời gian tương lai xa ($L \ge 720$).
+Dữ liệu nhiệt độ dầu máy biến áp (**OT — Oil Temperature**) và sáu nhánh phụ tải ETT chứa các chu kỳ vận hành, biến thiên theo thời gian và mối liên hệ có độ trễ. Bảng số liệu hoặc nhiều đường khác thang đo chồng lên nhau gây khó khăn khi so sánh tải, tìm giai đoạn OT cao và đặt một biến cố vào ngữ cảnh lịch sử.
 
-### 2. Giải Pháp Cốt Lõi: Đột Phá Với Informer (Zhou et al., AAAI-21)
-Dự án áp dụng mô hình học sâu **Informer** nhằm giải quyết triệt để các hạn chế trên thông qua 3 trụ cột toán học:
-- ⚡ **ProbSparse Self-Attention:** Tinh chọn top $M = c \cdot \ln(L)$ truy vấn nổi bật dựa trên độ đo phân kỳ Kullback-Leibler, cắt giảm độ phức tạp thời gian và bộ nhớ xuống **$O(L \ln L)$**.
-- 📉 **Self-Attention Distilling:** Tầng chưng cất tự chú ý áp dụng phép trích xuất đặc trưng với phép gộp max-pooling (stride = 2), giảm một nửa chiều dài chuỗi ở mỗi tầng xếp chồng, triệt tiêu nút thắt bộ nhớ.
-- 🎯 **Generative Style Decoder:** Bộ giải mã sinh trực tiếp toàn bộ chuỗi dự báo đa bước chỉ trong **1 bước forward duy nhất**, loại trừ hoàn toàn sự tích lũy trễ và khuếch đại sai số hồi quy.
+**Giải pháp v2.0:** Tổ chức một Statistical Analytics Engine tiền tính toán để chuyển dữ liệu lịch sử thành hai góc nhìn tương tác: **lập kế hoạch vận hành** và **tra cứu rủi ro nhiệt**. Trọng tâm là diễn giải dữ liệu, không xây dựng mô hình dự báo hay hệ thống điều khiển thiết bị.
 
----
+> **Giới hạn diễn giải:** 85°C và 95°C là ngưỡng phân tích của dự án, không phải tiêu chuẩn kỹ thuật phổ quát. Dashboard không phải hệ thống giám sát trực tiếp hoặc an toàn được chứng nhận. Tương quan, LOESS và Z-score chỉ hỗ trợ hình thành giả thuyết; không chứng minh nhánh tải là nguyên nhân sự cố.
 
-### 3. Hai User Stories Mục Tiêu (Target Personas)
+### 1.2. Hai User Stories cốt lõi
 
-```
-┌────────────────────────────────────────────────────────────────────────────────────────┐
-│  OPERATIONAL MANAGER (US-01)                 DEEP LEARNING RESEARCHER (US-02)          │
-│  "Giám sát an toàn vận hành & Cảnh báo"      "Phân tích mô hình & Đánh giá bất định"   │
-│                                                                                        │
-│  • Giám sát OT thời gian thực (Threshold 95°C) • Đánh giá đa khung: 24h -> 720h bước   │
-│  • Cảnh báo Pop-out tức thời khi quá nhiệt     • Phân tích Fan Chart (80% & 95% CI)    │
-│  • SLA phản hồi giao diện Dashboard <= 2s      • Ma trận ProbSparse Attention & Phần dư│
-└────────────────────────────────────────────────────────────────────────────────────────┘
-```
+| Vai trò | User Story | Góc nhìn / tương tác đích |
+|---|---|---|
+| **US-01 · Operational Manager** — Nhà quản lý vận hành | **Là** nhà quản lý vận hành, **tôi muốn** quan sát chu kỳ phụ tải ngày/mùa, tỷ trọng tải hữu ích so với tải vô ích qua ba cấp điện áp và độ trễ liên hệ với OT, **để** hỗ trợ điều độ công suất và lập lịch bảo dưỡng. | Calendar Heatmap; STL panels; Hourly Quantile Fan; 100% Stacked Bar; Lag Heatmap. Lọc dataset, mùa và thời gian. |
+| **US-02 · Safety & Risk Monitor** — Nhân viên giám sát an toàn | **Là** nhân viên giám sát an toàn, **tôi muốn** tra cứu OT tiệm cận/vượt 85°C và 95°C, xem thời lượng cùng áp lực nhiệt tích lũy, rồi đối chiếu sáu nhánh tải, **để** ưu tiên kiểm tra và khoanh vùng giả thuyết bất thường. | OT threshold line/shading; Barcode/Rug; sáu Synchronized Small Multiples; Joint Scatter + LOESS; Boxplots theo chế độ nhiệt. Đồng bộ trục X, zoom và lựa chọn cửa sổ. |
 
-- **US-01: Operational Manager (Quản lý Vận hành lưới điện):**
-  > *"Là Quản lý Vận hành, tôi muốn theo dõi diễn biến nhiệt độ dầu máy biến áp OT liên tục cùng vạch cảnh báo an toàn 95°C trên biểu đồ trực quan, đồng thời nhận thông báo cảnh báo tức thời khi dự báo vi phạm ngưỡng an toàn để chủ động điều phối tải, ngăn ngừa sự cố chập nổ lưới điện."*
-  - **Yêu cầu trực quan:** Line Chart tương tác tích hợp đường tham chiếu ngang 95°C, banner trạng thái pop-out đổi màu cảnh báo nổi bật (Đỏ gạch `#DC2626` / Hổ phách), thời gian phản hồi giao diện $\le 2\text{s}$.
+Trong README, “vô công/hao phí” là cách gọi nghiệp vụ của **Unuseful Load**; chưa đủ bằng chứng để đồng nhất với công suất phản kháng đã hiệu chuẩn. **Thời lượng quá nhiệt** đo bằng giờ; **Degree-Hours** đo bằng °C·h, không thay thế cho thời lượng.
 
-- **US-02: Deep Learning Researcher (Kỹ sư Học sâu & Nghiên cứu dữ liệu):**
-  > *"Là Kỹ sư Học sâu, tôi muốn kiểm định hiệu năng mô hình Informer trên 5 khung thời gian dài hạn (24, 48, 168, 336, 720 bước), quan sát dải phân vị bất định (80% & 95% Confidence Intervals), phân tích phân phối phần dư và trực quan hóa ma trận chú ý ProbSparse Attention để chứng minh tính vượt trội so với các baseline LSTM/ARIMA."*
-  - **Yêu cầu trực quan:** Fan Chart / Ribbon Chart đổ bóng mờ phân vị (`opacity = 0.30` cho 80% CI, `0.15` cho 95% CI), Residuals Scatter Plot & Histogram sai số, Heatmap ma trận trọng số chú ý, bảng đối chuẩn MSE/MAE đa khung thời gian.
-
----
-
-## 🚀 Tính Năng Cốt Lõi & Kiến Trúc Hệ Thống
-
-### 1. Tính Năng Nổi Bật
-- **Pipeline Xử Lý Dữ Liệu Chuẩn:** Tự động hóa tiền xử lý tập dữ liệu ETT (*ETTh1*, *ETTh2*, *ETTm1*), làm sạch 100% missing values, tạo Sliding Window và mã hóa Time Covariates (Giờ, Ngày, Tháng).
-- **Động Cơ Dự Báo Informer:** Triển khai hoàn chỉnh ProbSparse Attention, Distilling Encoder và Generative Decoder hỗ trợ huấn luyện phân tán trên GPU.
-- **Ước Lượng Dải Bất Định (Prediction Intervals):** Trích xuất dải tin cậy 80% và 95% thông qua phân vị sai số phần dư (Quantile Residuals), gán cờ cảnh báo rủi ro `is_breach_95c`.
-- **Kiến Trúc Tách Rời (Decoupled Dashboard Architecture):** Web Dashboard không chạy suy luận PyTorch thời gian thực mà đọc các file tĩnh Parquet/JSON đã được tiền tính toán, đảm bảo thời gian tải trang **$\le 2\text{s}$**, loại trừ tải nặng lên GPU của máy chủ giao diện.
-- **Tuân Thủ Chuẩn Mực Thị Giác Cao Cấp:** Thiết kế dựa trên nguyên lý tỷ lệ dữ liệu-mực của **Edward Tufte**, nguyên lý nhóm thị giác **Gestalt**, phối màu an toàn cho người mù màu (**Colorblind-Safe & WCAG 2.1 AA**), và 100% biểu đồ sử dụng **Action Titles**.
-
----
-
-### 2. Sơ Đồ Pipeline Tổng Thể (End-to-End Pipeline)
+### 1.3. Kiến trúc dữ liệu đầu cuối — đích triển khai
 
 ```mermaid
-flowchart TD
-    subgraph S1["1. Data Ingestion & ETL"]
-        D1[("ETT Raw Dataset<br/>ETTh1, ETTh2, ETTm1")] --> D2["Preprocess Script<br/>scripts/preprocess_ett.py"]
-        D2 --> D3[("Clean Data<br/>clean_ett.parquet")]
-        D3 --> D4["Data Loader & Sliding Window<br/>src/data/dataloader.py"]
-    end
-
-    subgraph S2["2. Deep Learning Engine (Informer)"]
-        D4 --> M1["ProbSparse Self-Attention<br/>O(L ln L) KL Divergence"]
-        M1 --> M2["Attention Distilling<br/>Max-pooling stride 2"]
-        M2 --> M3["Generative Decoder<br/>Direct Multi-Step Output"]
-        M3 --> M4["Training & Optimization<br/>scripts/train_informer.py"]
-        M4 --> M5[("Model Checkpoint<br/>models/best_informer.pt")]
-    end
-
-    subgraph S3["3. Benchmarking & Artifact Generation"]
-        M5 --> E1["Benchmark Evaluation<br/>scripts/evaluate_benchmark.py"]
-        M5 --> E2["Uncertainty Estimation<br/>scripts/export_uncertainty_artifacts.py"]
-        E1 --> A1[("predictions_benchmark.parquet<br/>Horizons: 24, 48, 168, 336, 720")]
-        E2 --> A2[("uncertainty_intervals.parquet<br/>80% & 95% CI + Breach Flags")]
-        E2 --> A3[("residuals_analysis.parquet<br/>Z-Score & Outlier Tags")]
-        E2 --> A4[("attention_weights.json<br/>Top-K Sparse Query Maps")]
-    end
-
-    subgraph S4["4. Decoupled Presentation Layer (SLA <= 2s)"]
-        A1 & A2 & A3 & A4 --> UI["Streamlit Web Application<br/>app.py"]
-        UI --> V1["US-01: Operational Dashboard<br/>Threshold 95°C Line & Instant Banner"]
-        UI --> V2["US-02: DL Research Dashboard<br/>Fan Chart, Residuals & Attention Heatmap"]
-    end
-
-    classDef data fill:#eff6ff,stroke:#1d4ed8,stroke-width:1.5px;
-    classDef model fill:#fdf4ff,stroke:#a21caf,stroke-width:1.5px;
-    classDef artifact fill:#f0fdf4,stroke:#15803d,stroke-width:1.5px;
-    classDef ui fill:#fff7ed,stroke:#c2410c,stroke-width:1.5px;
-
-    class D1,D3,M5,A1,A2,A3,A4 data;
-    class D2,D4,M1,M2,M3,M4 model;
-    class E1,E2 artifact;
-    class UI,V1,V2 ui;
+flowchart LR
+    RAW["ETT raw CSV<br/>ETTh1 / ETTh2 / ETTm1"] --> ETL["ETL + Feature Engineering<br/>Kiểm toán missing / duplicate / gap"]
+    ETL --> CLEAN["clean_ett.parquet<br/>Dữ liệu sạch + biến phái sinh"]
+    CLEAN --> ENGINE["Statistical Analytics Engine<br/>STL / Quantiles / Lag / Thermal / LOESS"]
+    ENGINE --> ART["Pre-computed Parquet / JSON<br/>Version + Metadata + Validation"]
+    CLEAN --> UI["Streamlit + Plotly<br/>Chỉ đọc dữ liệu tiền tính toán"]
+    ART --> UI
+    UI --> MANAGER["Story 1<br/>Operational Manager"]
+    UI --> SAFETY["Story 2<br/>Safety & Risk Monitor"]
 ```
+
+**Ranh giới tính toán:** ETL và Engine chạy ngoài UI. Giao diện chỉ nạp artifacts, lọc/lấy lát dữ liệu nhẹ và dựng biểu đồ; không chạy STL, phân vị, tương quan trễ, LOESS hoặc tính risk nặng trong luồng tương tác. Cache phải phụ thuộc nguồn/phiên bản artifacts. **SLA mục tiêu: load/render/filter <2 giây**, chưa có số đo xác nhận.
+
+| Thành phần phân tích | Kết quả và quy tắc cốt lõi |
+|---|---|
+| **STL Decomposition** | Tách observed thành trend + seasonal + residual; chu kỳ ngày là 24 mẫu cho ETTh và 96 mẫu cho ETTm1. |
+| **Historical Empirical Quantile Bands** | Theo giờ/mùa: IQR 50% = Q25–Q75; 80% = Q10–Q90; 95% = Q2.5–Q97.5; median và mean là hai đường phân biệt. |
+| **Lag Cross-Correlation 0–12h** | Pearson/Spearman giữa load(t) và OT(t+k giờ); lag dương nghĩa tải đi trước OT; căn theo timestamp, không nối mù qua gap. |
+| **Thermal events / Degree-Hours** | Trích xuất riêng từng ngưỡng OT ≥85°C và ≥95°C; đo duration, peak và tích lũy phần nhiệt vượt ngưỡng. |
+| **LOESS + Z-score** | Khảo sát quan hệ phi tuyến và độ lệch tương đối trong cửa sổ biến cố; tiền tính ngoài UI, cần thống nhất schema bổ sung trước triển khai. |
 
 ---
 
-## 📂 Cấu Trúc Repository
+<a id="architecture"></a>
+## Tầng 2 — Kiến trúc & hợp đồng | Zoom and filter
 
-Cấu trúc dự án được chuẩn hóa theo phân quyền 3 tầng ranh giới (`Red Zone` - Read Only, `Amber Zone` - Conditional, `Green Zone` - Autonomous):
+### 2.1. Workspace: hiện trạng khác với kiến trúc đích
+
+**Chú giải:** `[HIỆN CÓ]` = đường dẫn đã tồn tại, không đồng nghĩa đã có implementation; `[ĐÍCH]` = chưa tồn tại. Cây rút gọn bỏ qua cache và `.gitkeep`.
 
 ```text
 data_visualization_project/
-│
-├── .env                              # Biến môi trường hệ thống
-├── .gitignore                         # Danh sách tệp loại trừ khỏi Git
-├── AGENTS.md                          # Hiến pháp quản trị & quy chuẩn thực thi cho AI Agent
-├── LICENSE                            # Giấy phép nguồn mở MIT License (2026 Trần Chí Vỹ)
-├── README.md                          # Tài liệu tổng quan & hướng dẫn kỹ thuật chính thức
-├── requirements.txt                   # Danh mục thư viện phụ thuộc của dự án
-├── virtual_enviroment.md              # Hướng dẫn chi tiết thiết lập môi trường ảo & Git
-│
-├── data/                              # Lưu trữ dữ liệu hệ thống
-│   ├── raw/                           # [RED ZONE] Dữ liệu ETT gốc (ETTh1, ETTh2, ETTm1)
-│   └── processed/                     # [GREEN ZONE] Dữ liệu sạch clean_ett.parquet
-│
-├── docs/                              # Tài liệu kỹ thuật & quản trị dự án
-│   ├── bug_fixes/                     # Nhật ký ghi nhận & xử lý lỗi phát sinh
-│   ├── dev_logs/                      # Nhật ký kỹ thuật của các đợt Sprint
-│   ├── project_charter/               # Project Charter, Sprint Manual & Đề cương đồ án
-│   │   ├── Final Project.pdf          # Đề cương & tiêu chí đồ án Trực quan hóa Dữ liệu
-│   │   └── ▶️[DIEU_HANH] LSTF...pdf    # Bản đặc tả điều hành WBS 16 tasks & RACI
-│   ├── references/                    # Bài báo nghiên cứu khoa học nền tảng
-│   │   └── 2021_Zhou_Informer_AAAI.pdf# Paper gốc mô hình Informer (AAAI-21)
-│   ├── reports/                       # Báo cáo kỹ thuật tổng kết Giữa kỳ & Cuối kỳ
-│   └── thesis/                        # Tài liệu thuyết minh chuyên sâu
-│
-├── notebooks/                         # Jupyter Notebooks thực nghiệm & EDA
-│   └── 01_eda_ett.ipynb               # Phân tích khám phá dữ liệu chuỗi thời gian ETT
-│
-├── output/                            # Thư mục xuất sản phẩm trung gian
-│   └── artifacts/                     # [CONTRACT SCHEMAS] Parquet & JSON cho Dashboard
-│       ├── predictions_benchmark.parquet  # Dự báo so sánh Informer vs Baselines
-│       ├── uncertainty_intervals.parquet  # Dải tin cậy 80%, 95% & cờ cảnh báo 95°C
-│       ├── residuals_analysis.parquet     # Phân tích phần dư, Z-Score & Outliers
-│       └── attention_weights.json         # Ma trận trọng số ProbSparse Attention
-│
-├── scripts/                           # Kịch bản dòng lệnh độc lập
-│   ├── preprocess_ett.py              # Tiền xử lý dữ liệu và tạo Parquet
-│   ├── train_informer.py              # Huấn luyện mô hình Informer trên GPU/CPU
-│   ├── evaluate_benchmark.py          # Đánh giá đối chuẩn MSE/MAE trên 5 horizons
-│   └── export_uncertainty_artifacts.py# Ước lượng dải bất định & xuất artifacts
-│
-├── src/                               # Toàn bộ mã nguồn cốt lõi của hệ thống
-│   ├── data/                          # Data loader & Sliding window tensor pipeline
-│   ├── models/                        # Kiến trúc mô hình Informer (ProbSparse, Distilling)
-│   ├── analysis/                      # Động cơ phân tích phần dư & ước lượng dải bất định
-│   └── visuals/                       # Giao diện trực quan hóa Plotly & Streamlit
-│
-├── tests/                             # Kiểm thử tự động (Unit Tests & Schema Integrity)
-└── audit/                             # Báo cáo kiểm định chất lượng thị giác (Tufte & Gestalt)
+├── AGENTS.md                         [HIỆN CÓ] Quy chuẩn agent / hợp đồng v2.0
+├── README.md                         [HIỆN CÓ] Tài liệu định hướng này
+├── LICENSE                           [HIỆN CÓ] MIT
+├── requirements.txt                  [HIỆN CÓ] 🟡 Dependency được khai báo
+├── .gitignore                        [HIỆN CÓ] Loại trừ môi trường / secrets / cache
+├── .venv/                            [HIỆN CÓ] Môi trường cục bộ, không phân phối
+├── data/
+│   ├── raw/                          [HIỆN CÓ] 🔴 Chưa có CSV ETT
+│   └── processed/                    [ĐÍCH]    🟢 clean_ett.parquet
+├── docs/                             [HIỆN CÓ]
+│   ├── project_charter/              [HIỆN CÓ] 🔴 PDF / Excel / HTML điều hành
+│   ├── references/                   [HIỆN CÓ] 🔴 Tài liệu nguồn lưu trữ
+│   ├── dev_logs/                     [HIỆN CÓ] 🟢 Nhật ký phát triển, hiện là khung
+│   └── bug_fixes/, reports/, thesis/  [HIỆN CÓ] Khung tài liệu
+├── src/
+│   ├── data/                         [HIỆN CÓ] 🟢 Chưa có mã nguồn .py
+│   ├── analysis/                     [ĐÍCH]    🟢 Statistical Engine
+│   └── visuals/                      [ĐÍCH]    🟢 Hai góc nhìn / Plotly charts
+├── scripts/                          [HIỆN CÓ] 🟢 Chưa có CLI nguồn
+├── notebooks/                        [HIỆN CÓ] 🟢 Chưa có notebook phân tích
+├── output/                           [HIỆN CÓ] Khung đầu ra
+│   └── artifacts/                    [ĐÍCH]    🟢 Artifacts tiền tính toán
+├── tests/                            [HIỆN CÓ] 🟢 Chưa có test nguồn
+├── audit/                            [ĐÍCH]    🟢 Bằng chứng visual QA / hiệu năng
+└── app.py                            [ĐÍCH]    🟡 Entry point Streamlit
 ```
 
+| Vùng | Quyền thao tác | Ràng buộc |
+|---|---|---|
+| 🔴 **Red — Read-only** | Đọc `data/raw/`, `docs/project_charter/`, `docs/references/` | Không sửa/xóa/đổi tên/ghi đè dữ liệu hoặc tài liệu gốc. Thu thập raw cần quy trình riêng được thống nhất. |
+| 🟡 **Amber — Confirmation required** | `requirements.txt`, `app.py`, cấu hình triển khai | Phải có xác nhận trước khi tạo/sửa; không tự cài hoặc nâng dependency. |
+| 🟢 **Green — Autonomous** | `src/data/`, `src/analysis/`, `src/visuals/`, `scripts/`, `notebooks/`, dữ liệu dẫn xuất, `tests/`, `audit/`, `docs/dev_logs/` | Tự triển khai trong phạm vi task và contract; giữ thay đổi của người khác. |
+
+Quy tắc đầy đủ ở [AGENTS.md](AGENTS.md): làm trên feature branch, không tự commit/push, không đọc/in secrets và không biến kế hoạch thành tuyên bố đã hoàn thành.
+
+### 2.2. Dữ liệu ETT & thang đo Stevens
+
+| Dataset | Độ phân giải | Quy tắc phân tích |
+|---|---|---|
+| `ETTh1`, `ETTh2` | 1 giờ / mẫu | Xử lý riêng từng dataset; lag k giờ tương ứng k mẫu khi chuỗi liên tục. |
+| `ETTm1` | 15 phút / mẫu | Lag k giờ tương ứng 4k mẫu khi chuỗi liên tục; không trộn với độ phân giải giờ. |
+
+**Đơn vị quan sát:** một mẫu thời gian trong một dataset. Nguồn có **8 cột: `date` + 7 biến định lượng**; không phải bảy cột bao gồm thời gian. Số dòng, khoảng ngày, missing và extrema phải được kiểm kê trên tệp thực có, không suy từ mô tả tài liệu.
+
+| Trường nguồn | Ý nghĩa | Phân loại / Stevens | Mã hóa phù hợp |
+|---|---|---|---|
+| `date` | Thời điểm quan sát | Temporal; khoảng cách thời gian có ý nghĩa, không có gốc tỉ lệ tuyệt đối | Vị trí X liên tục; calendar cells |
+| `HUFL` | High Useful Load — tải hữu ích cao áp | Định lượng; thang tỉ lệ theo mô tả nghiệp vụ, cần xác minh zero/đơn vị nguồn | Vị trí Y; bar; facet cao áp |
+| `HULL` | High Unuseful Load — tải vô ích cao áp | Định lượng; tỉ lệ có điều kiện xác minh như trên | Bar ghép/cặp; tỷ trọng khi hợp lệ |
+| `MUFL` | Middle Useful Load — tải hữu ích trung áp | Định lượng; tỉ lệ có điều kiện xác minh như trên | Vị trí Y; facet trung áp |
+| `MULL` | Middle Unuseful Load — tải vô ích trung áp | Định lượng; tỉ lệ có điều kiện xác minh như trên | Bar ghép/cặp; tỷ trọng khi hợp lệ |
+| `LUFL` | Low Useful Load — tải hữu ích hạ áp | Định lượng; tỉ lệ có điều kiện xác minh như trên | Vị trí Y; facet hạ áp |
+| `LULL` | Low Unuseful Load — tải vô ích hạ áp | Định lượng; tỉ lệ có điều kiện xác minh như trên | Bar ghép/cặp; tỷ trọng khi hợp lệ |
+| `OT` | Nhiệt độ dầu, °C | Định lượng / **Interval**; 0°C không phải không có nhiệt | Vị trí Y; line; histogram; boxplot |
+
+Các trường dẫn xuất: `dataset` là nominal; `thermal_regime` là ordinal (Normal → Warning → Critical, Unknown tách riêng); `duration_hours` và `degree_hours` là đại lượng tỉ lệ. Không tự gán MW/MVar cho tải hoặc diễn giải “40°C nóng gấp đôi 20°C”.
+
+### 2.3. Artifact contracts — giao diện ETL / Engine / UI
+
+> **Hợp đồng đã đặc tả, artifacts chưa được sinh.** Dùng năm tên chuẩn dưới đây theo [AGENTS.md](AGENTS.md), thay vì tạo thêm alias hoặc tự đổi định dạng giữa producer và consumer.
+
+| Artifact chuẩn | Producer → Consumer | Grain / khóa | Trường chính và ràng buộc |
+|---|---|---|---|
+| `data/processed/clean_ett.parquet` | ETL → Engine + UI | Một mẫu; `dataset + timestamp` | `OT`, sáu tải, `total_useful_load`, `total_unuseful_load`, `reactive_ratio`, `thermal_regime`, `is_imputed`; thời gian tăng dần, không trùng trong dataset. |
+| `output/artifacts/load_profiles_stl.parquet` | Engine → UI Story 1 | Long-form; `record_type=stl/profile` | STL: `dataset + variable + timestamp`, observed/trend/seasonal/residual. Profile: `dataset + variable + season + hour`, mean/median/std/sample_count. Cột không áp dụng = null. |
+| `output/artifacts/quantile_bands.parquet` | Engine → Fan Chart | `dataset + variable + season + hour` | `sample_count`, `mean`, `q025`, `q10`, `q25`, `q50`, `q75`, `q90`, `q975`; đủ 24 bins, thiếu mẫu → thống kê null. |
+| `output/artifacts/thermal_breach_events.parquet` | Engine → UI Story 2 | Một đợt liên tục theo ngưỡng; `dataset + event_id` | `threshold_c`, `thermal_regime`, `start_timestamp`, `end_timestamp`, `duration_hours`, `peak_ot`, `degree_hours`, `sample_count`, `is_right_censored`. |
+| `output/artifacts/lag_correlation_matrix.json` | Engine → Lag Heatmap | Envelope nhiều dataset/mùa/phương pháp | `records` chứa dataset/season/method, thứ tự sáu tải, lags 0..12, ma trận correlation và sample_counts cùng kích thước 6×13. |
+
+<details>
+<summary><strong>Chi tiết theo nhu cầu: dtype, thời gian, chất lượng và công thức</strong></summary>
+
+- **Dtype:** Parquet dùng string, `datetime64[ns]`, `float32`, `int32`, bool; nullable theo schema. JSON dùng `null`, không ghi NaN/Infinity. Không thêm cột ngoài contract nếu chưa đồng bộ producer/consumer/tests.
+- **Timestamp:** đổi `date` thành `timestamp`; chưa biết timezone thì giữ timestamp không gán múi giờ và ghi `timezone=unknown`. Chuỗi trao đổi RFC3339 chỉ dùng offset đã xác minh; không tự thêm `Z`.
+- **Metadata:** schema version 2.0, dataset/source hash, tham số, seed 2026 và thời điểm sinh. Parquet lưu metadata; JSON tuân thủ envelope quy định trong AGENTS. Kiểm định trước khi ghi tệp tạm và thay thế nguyên tử.
+- **Biến phái sinh:** `total_useful_load = HUFL + MUFL + LUFL`; `total_unuseful_load = HULL + MULL + LULL`; `reactive_ratio = total_unuseful_load / total_useful_load`, mẫu số ≤0 → null. Tải âm hoặc mẫu số cặp ≤0 không được ép thành tỷ trọng 100% hợp lệ.
+- **Chế độ nhiệt:** Normal khi OT<85; Warning khi 85≤OT<95; Critical khi OT≥95; OT thiếu → Unknown. Tên chế độ là nhãn dự án, không phải xác nhận an toàn thiết bị.
+- **Quantiles:** phải tăng không giảm, dải lồng nhau. Q5–Q95 là **90%**, không phải 95%. Dải lịch sử mô tả phân phối mẫu, không phải confidence interval của mean hay prediction interval.
+- **Thermal:** `degree_hours = Σ max(OT − threshold_c, 0) × Δt_hours`, với Δt=1h hoặc 0.25h trên hỗ trợ mẫu hợp lệ. Sự kiện dùng `[start,end)`; không nối qua missing/gap, không kéo dài mẫu cuối chưa biết hỗ trợ; đánh dấu right-censored khi cần.
+- **Hai ngưỡng:** đợt ≥95 có thể nằm trong đợt ≥85; không cộng chồng thời lượng hoặc Degree-Hours giữa hai ngưỡng. Không có breach → bảng rỗng đúng dtype; không sửa nhiệt độ để tạo demo.
+- **Lag:** `r(k) = corr(load(t), OT(t+k giờ))`; Pearson/Spearman, hệ số trong [-1,1] hoặc null; số cặp hợp lệ ≥0. Constant/thiếu cặp không được biến thành hệ số 0.
+- **Missing:** audit duplicate/gap trước xử lý, nội suy chỉ theo policy khoảng ngắn; giữ đỉnh OT hợp lệ. Thiếu mẫu phải có ngữ cảnh chất lượng, không suy ra Normal.
+- **LOESS / Z-score:** chưa có artifact bổ sung được thống nhất; không lách ranh giới bằng cách tính trực tiếp trong UI. Biến constant có Z-score không xác định, không mặc định bằng 0.
+
+</details>
+
+### 2.4. Nền tảng thiết kế thị giác
+
+| Nguyên lý | Áp dụng có thể kiểm tra |
+|---|---|
+| **Munzner — What / Why / How** | Mỗi chart ghi dữ liệu đầu vào, câu hỏi theo User Story, encoding và interaction; ưu tiên position/length khi so sánh định lượng. |
+| **Tufte — Data-Ink** | Bỏ viền hộp, 3D, bóng và lưới phụ; lưới chính `#E2E8F0`. Giữ đơn vị, ngưỡng, cỡ mẫu và ngữ cảnh. Action Title phải được dữ liệu trong bộ lọc hỗ trợ, không bịa insight. |
+| **Gestalt — Proximity / Alignment** | Nhóm KPI liên quan; sáu small multiples căn thẳng dưới OT, cùng trục thời gian, zoom và selection. |
+| **Gestalt — Enclosure / Similarity** | Dải bao cho quantiles và events; nhất quán màu tải hữu ích/vô ích; không chồng bảy đường khác thang đo. |
+| **Pre-attentive pop-out** | Chỉ làm nổi bật cảnh báo/biến cố phù hợp; thêm nhãn, dash hoặc shape, không dựa duy nhất vào màu. |
+| **Accessibility — mục tiêu WCAG AA** | Kiểm tra tương phản chữ thường ≥4.5:1 trên nền thực tế; thử grayscale, deuteranopia/protanopia. Không tự gắn nhãn “đã đạt” khi chưa audit. |
+
+| Vai trò ngữ nghĩa | Màu / encoding |
+|---|---|
+| OT / tải hữu ích / dữ liệu bối cảnh | Navy `#1E3A8A` / Teal `#0D9488` / Slate `#64748B` |
+| Warning / Critical | Amber `#D97706` / Crimson `#DC2626`, kèm ngưỡng và nhãn; không dùng cặp đỏ–xanh lá cạnh tranh |
+| Bands 50% / 80% / 95% | Blue `#93C5FD`, alpha 0.28 / 0.20 / 0.14; vẽ dải rộng trước, median/mean không bị che |
+
 ---
 
-## 🛠️ Công Nghệ Sử Dụng (Tech Stack)
+<a id="operations"></a>
+## Tầng 3 — Thực thi & quản trị | Details-on-demand
 
-| Lĩnh vực | Thư viện / Công nghệ | Phiên bản | Mục đích sử dụng |
-| :--- | :--- | :--- | :--- |
-| **Core Platform** | Python | 3.11+ | Ngôn ngữ phát triển chính |
-| **Deep Learning** | PyTorch | 2.x | Cài đặt ProbSparse Attention, Encoder-Decoder, huấn luyện GPU |
-| **Data Engineering** | Pandas, NumPy, Scipy | Mới nhất | Xử lý mảng số học, phân tích thống kê chuỗi thời gian |
-| **Data Storage** | Apache Parquet (Fastparquet/PyArrow) | - | Lưu trữ cột nén, tối ưu hóa tốc độ đọc nạp dưới 2 giây |
-| **Data Visualization** | Plotly, Seaborn, Matplotlib | - | Xây dựng đồ thị tương tác cao cấp (Fan chart, Heatmap, Scatter) |
-| **Web Dashboard** | Streamlit | 1.x | Nền tảng dựng giao diện phân luồng Quản lý vs Nghiên cứu |
-| **Code Quality & Test** | Pytest, Flake8 | - | Kiểm thử tự động, xác thực Schema và tuân thủ chuẩn PEP 8 |
+### 3.1. Môi trường và khả năng tái lập
 
----
+**Prerequisites:** Git, Windows PowerShell và **Python 3.11+** theo baseline trong AGENTS. Interpreter cục bộ đã kiểm tra là Python 3.11.1; Python 3.10 chưa được xác nhận hỗ trợ. Không cần phần cứng tăng tốc chuyên dụng.
 
-## ⚙️ Hướng Dẫn Cài Đặt & Thực Thi (Quickstart)
-
-### 1. Yêu Cầu Môi Trường (Prerequisites)
-- Hệ điều hành: Windows 10/11, Ubuntu 22.04+ hoặc macOS.
-- Python: Phiên bản `3.11` trở lên.
-- Card đồ họa (tùy chọn): NVIDIA GPU hỗ trợ CUDA 11.8+ (khuyên dùng khi huấn luyện chuỗi 720 bước).
-
-### 2. Thiết Lập Môi Trường Ảo
-Mở terminal tại thư mục gốc của repository:
+**Stack đích:** Pandas, NumPy, SciPy, Statsmodels, Plotly, Streamlit, Seaborn, Missingno; Parquet cần backend được duyệt như PyArrow. Đây là danh mục kiến trúc, **không phải danh sách đã khai báo đầy đủ để cài**.
 
 ```powershell
-# Trên Windows PowerShell:
-python -m venv .venv
-.\.venv\Scripts\activate
-
-# Trên Linux / macOS:
-python3 -m venv .venv
-source .venv/bin/activate
+# Chạy tại repository root; dùng môi trường hiện có, không ghi đè .venv.
+Set-Location 'F:\Study Materials\specialized_subject\Visualization\Visualization_gr\data_visualization_project'
+. .\.venv\Scripts\Activate.ps1
+python -V
+python -c "import sys; print(sys.executable)"
+python -m pip list
 ```
 
-### 3. Cài Đặt Dependencies
-```bash
-pip install -r requirements.txt
+Chỉ khi thiết lập trên máy mới **chưa có `.venv`**, tạo môi trường rồi kích hoạt:
+
+```powershell
+py -3.11 -m venv .venv
+. .\.venv\Scripts\Activate.ps1
+# Cài đúng manifest đã duyệt; không tự thêm/nâng package.
+python -m pip install -r requirements.txt
 ```
 
-### 4. Chuẩn Bị Dữ Liệu Thực Nghiệm (ETT Dataset)
-Tập dữ liệu chuẩn bao gồm 2 năm dữ liệu giám sát phụ tải và nhiệt độ máy biến áp điện lực:
-- `ETTh1.csv`, `ETTh2.csv`: Chu kỳ ghi nhận 1 giờ (17.520 bản ghi/file).
-- `ETTm1.csv`: Chu kỳ ghi nhận 15 phút (70.080 bản ghi/file).
+| Hiện trạng dependency | Hệ quả |
+|---|---|
+| `requirements.txt` chỉ có `python-dotenv`, `kaggle`, `pandas`, chưa pin phiên bản | Cài manifest hiện tại chưa đủ để chạy kiến trúc đích và chưa bảo đảm tái lập phiên bản chính xác. |
+| Môi trường cục bộ có một số thư viện ngoài manifest, nhưng thiếu Statsmodels và Missingno | Package “đang có trên máy” không phải dependency đã được phê duyệt cho dự án. |
+| Chưa có mã ETL/Engine/UI, dữ liệu nguồn hay artifacts | Không có quickstart end-to-end chạy được ở thời điểm khảo sát. |
 
-Đặt các tệp CSV gốc vào thư mục `data/raw/`. Sau đó chạy lệnh tiền xử lý để tạo tệp sạch chuẩn Parquet:
-```bash
-python scripts/preprocess_ett.py --data ETTh1 --out data/processed/clean_ett.parquet
-```
+**Bước mở khóa:** nhóm phê duyệt manifest/backend Parquet và phiên bản; thực hiện quy trình thu thập dữ liệu có provenance; triển khai ETL, Engine, contracts/tests; chỉ sau đó tạo entry point UI có xác nhận. Không tự cài package để vượt lỗi. Không đọc hoặc đưa nội dung `.env` vào log/commit.
 
----
+### 3.2. CLI workflow — hợp đồng đích, chưa phải quickstart hoạt động
 
-## 💻 Hướng Dẫn Thực Thi (Usage & Workflow)
+Các lệnh dưới đây chạy sau khi kích hoạt `.venv`, tại root. **Chưa chạy các CLI đích khi script chưa tồn tại**; khi triển khai phải kiểm tra `--help`, input và schema trước.
 
-Hệ thống được vận hành độc lập theo quy trình tách rời từ huấn luyện mô hình đến khởi chạy giao diện:
+| Bước | Lệnh PowerShell | Trạng thái / điều kiện |
+|---|---|---|
+| 1 · ETL | `python scripts/preprocess_ett.py --data ETTh1 --out data/processed/clean_ett.parquet` | **ĐÍCH:** chưa có script/CSV; giữ raw bất biến, xử lý riêng dataset. |
+| 2 · Statistical Engine | `python scripts/run_statistical_engine.py --input data/processed/clean_ett.parquet --out output/artifacts` | **ĐỀ XUẤT:** chưa có script; tiền tính artifacts ngoài UI. |
+| 3 · Dashboard | `python -m streamlit run app.py` | **ĐÍCH / AMBER:** chưa có entry point; cần artifacts và phê duyệt tạo/sửa. |
+| 4 · Tests | `python -m pytest tests/ -v --tb=short` | Runner có trong `.venv` cục bộ, chưa có test nguồn; thu thập 0 tests không phải PASS. |
 
-### Bước 1: Huấn Luyện Mô Hình Informer
-Chạy huấn luyện mô hình với cơ chế Early Stopping (patience=3) và hạt giống tái lập `SEED=2026`:
-```bash
-python scripts/train_informer.py --data ETTh1 --pred_len 24 --epochs 20 --patience 3
-```
-*Trọng số tối ưu sẽ được lưu tại `models/best_informer.pt`.*
+Khi bổ sung nhiều dataset vào một tệp clean, ETL phải bảo toàn khóa `dataset + timestamp`; không chạy lặp CLI một cách mù quáng để ghi đè kết quả dataset trước. Chính sách ghi/ghép cần được kiểm thử khi hiện thực hóa CLI.
 
-### Bước 2: Đánh Giá Đối Chuẩn (Benchmarking)
-So sánh đối chuẩn hiệu năng mô hình Informer với Baseline (LSTM, ARIMA) trên toàn bộ 5 khung dự báo:
-```bash
-python scripts/evaluate_benchmark.py --models informer,lstm,arima --horizons 24,48,168,336,720
-```
-*Tạo file kết quả `output/artifacts/predictions_benchmark.parquet`.*
+<details>
+<summary><strong>Checklist xử lý khi chưa chạy được</strong></summary>
 
-### Bước 3: Xuất Dải Bất Định & Ma Trận Chú Ý
-Trích xuất khoảng tin cậy 80% & 95% và ma trận chú ý ProbSparse Attention:
-```bash
-python scripts/export_uncertainty_artifacts.py --checkpoint models/best_informer.pt
-```
-*Tạo các file `uncertainty_intervals.parquet`, `residuals_analysis.parquet` và `attention_weights.json`.*
+1. Xác nhận đúng interpreter `.venv`; so sánh package với manifest đã duyệt.
+2. Kiểm tra script/input thực sự tồn tại; `.pyc` và cache không thay thế mã nguồn.
+3. Nếu thiếu package/backend: báo **BLOCKED**, xin duyệt thay vì tự cài.
+4. Nếu thiếu dataset hoặc provenance: không sinh dữ liệu giả như kết quả thực nghiệm; fixture tổng hợp chỉ dùng trong tests, ngoài raw.
+5. Nếu thiếu app/artifacts: báo SLA **N/A**, không suy diễn cache sẽ tự bảo đảm <2s.
 
-### Bước 4: Khởi Chạy Web Dashboard
-Khởi chạy giao diện giám sát vận hành và nghiên cứu:
-```bash
-streamlit run app.py
-```
-Giao diện sẽ tự động mở trên trình duyệt tại `http://localhost:8501`. Người dùng có thể chuyển đổi linh hoạt giữa giao diện **Operational Manager** và **DL Researcher**.
+</details>
 
-### Bước 5: Chạy Kiểm Thử Toàn Diện
-Xác thực tính toàn vẹn của schema dữ liệu và các hàm cốt lõi:
-```bash
-pytest tests/ -v --tb=short
-```
+### 3.3. Nhân sự, WBS và RACI
 
----
+| Thành viên | Vai trò | Trách nhiệm chính |
+|---|---|---|
+| **A** | Data & ETL Lead | Thu thập, chất lượng dữ liệu, ETL, feature engineering và schema clean. |
+| **B** | Statistical & Domain Analytics Lead | STL, quantiles, lag correlation và phân tích sự kiện nhiệt. |
+| **C** | UI Lead — Story 1 | Góc nhìn quản lý vận hành và các biểu đồ liên quan. |
+| **D** | UI Lead — Story 2 | Góc nhìn tra cứu nhiệt, events và small multiples. |
+| **E** | PM & Visual QA Auditor | Điều phối, wireframe, audit thị giác/tiếp cận và hồ sơ bàn giao. |
 
-## 📊 Đối Chuẩn Thực Nghiệm & Kết Quả (Benchmarks)
+**RACI:** R = Responsible (thực thi), A = Accountable (chịu trách nhiệm cuối cùng), C = Consulted, I = Informed. Chữ A trong ô RACI khác mã thành viên A ở tiêu đề cột.
 
-### 1. Thông Số Dữ Liệu & Biến Mục Tiêu
-- **Biến mục tiêu:** `OT` (Oil Temperature) — Nhiệt độ dầu trạm biến áp (°C).
-- **Ngưỡng an toàn vật lý:** **95.0°C** (Mọi giá trị dự báo vượt mức này đều kích hoạt cảnh báo nguy cấp).
-- **6 Biến tải điện phụ trợ:** `HUFL` (High Useful Load), `HULL` (High Useless Load), `MUFL` (Middle Useful Load), `MULL` (Middle Useless Load), `LUFL` (Low Useful Load), `LULL` (Low Useless Load).
-- **Tỷ lệ phân chia dữ liệu:** 12 tháng Train / 4 tháng Validation / 4 tháng Test (tỷ lệ chuẩn `12/4/4`).
+| Work Package | Phạm vi / sản phẩm đích | TV A | TV B | TV C | TV D | TV E |
+|---|---|---|---|---|---|---|
+| **WP01** | Data ingestion, cleaning & feature engineering | R | C | I | I | A |
+| **WP02** | Statistical & Domain Analytics Engine | C | R | C | C | A |
+| **WP03** | Operational Manager Dashboard — Story 1 | I | C | R | I | A |
+| **WP04** | Safety & Risk Monitor Dashboard — Story 2 | I | C | I | R | A |
+| **WP05** | App integration, Data-Ink & accessibility QA | C | I | C | C | R/A |
+| **WP06** | Governance, reporting & final delivery | C | C | C | C | R/A |
 
-### 2. So Sánh Hiệu Năng Đa Khung Thời Gian (MSE & MAE)
-Mô hình Informer duy trì độ chính xác cao vượt trội và hạn chế tích lũy sai số khi chiều dài chuỗi dự báo tăng từ 24 bước đến 720 bước:
+Charter §7 định nghĩa **16 tasks / 6 Work Packages**. Lộ trình tương đối sáu tuần: nền tảng → ETL/EDA → Engine/wireframe → hai UI → tích hợp/QA → bàn giao. Đây là kế hoạch, không phải bằng chứng tiến độ hiện tại; trạng thái trong Charter phải đối chiếu với sản phẩm thực có.
 
-| Khung Dự Báo (Horizon) | Thời Gian Tương Đương | Chỉ Số Đánh Giá | Informer (Đề xuất) | LSTM (Baseline) | ARIMA (Thống kê) | Mức Cải Thiện vs LSTM |
-| :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| **24 bước** | 1 ngày | MSE / MAE | **0.098 / 0.241** | 0.142 / 0.298 | 0.185 / 0.340 | **↓ 31.0%** |
-| **48 bước** | 2 ngày | MSE / MAE | **0.158 / 0.312** | 0.231 / 0.384 | 0.298 / 0.442 | **↓ 31.6%** |
-| **168 bước** | 1 tuần | MSE / MAE | **0.245 / 0.389** | 0.395 / 0.498 | 0.512 / 0.589 | **↓ 38.0%** |
-| **336 bước** | 2 tuần | MSE / MAE | **0.312 / 0.435** | 0.528 / 0.581 | 0.720 / 0.698 | **↓ 40.9%** |
-| **720 bước** | 1 tháng | MSE / MAE | **0.365 / 0.472** | 0.680 / 0.665 | 0.985 / 0.812 | **↓ 46.3%** |
+Bảng Excel có **6 nhóm TQH-01..06**, chưa điền người phụ trách/hạn nộp; không tự ánh xạ thành 16 tasks hoặc thay thế RACI Charter. Quyền chịu trách nhiệm theo WP không tự phê duyệt thao tác AMBER của agent.
 
-> **Nhận xét chuyên môn:** Nhờ cơ chế Generative Decoder sinh trực tiếp chuỗi trong 1 bước và ProbSparse Attention loại bỏ nhiễu, Informer giảm tới **46.3%** sai số MSE ở khung dự báo dài hạn 720 bước so với mô hình chuỗi hồi quy LSTM.
+### 3.4. Definition of Done — cần bằng chứng, không chỉ checklist
 
----
+- [ ] **1 · Code / types / visual rules:** cú pháp hợp lệ, PEP 8, type hints đầy đủ trong `src/`, `SEED=2026`; constants tập trung; What–Why–How và encoding được đối chiếu.
+- [ ] **2 · Unit + smoke tests:** có tests thực sự và PASS; bao phủ STL reconstruction, quantile nesting, lag sign/cadence, missing/constant, thermal boundaries/gaps/right-censoring.
+- [ ] **3 · Governance:** raw/tài liệu RED không đổi; AMBER có xác nhận; diff đúng task/branch; không lộ secrets hoặc ghi đè công việc có sẵn.
+- [ ] **4 · Contracts:** tên file, keys, dtype, metadata, units, null/empty đúng schema; UI không tính nặng và chỉ đọc artifacts tương thích phiên bản.
+- [ ] **5 · SLA + delivery evidence:** load/render/filter <2s trên dữ liệu đại diện, ghi cấu hình và cold/warm cache riêng; visual/accessibility audit, đáp ứng hai US và hồ sơ bàn giao đầy đủ.
 
-## 🎨 Quy Chuẩn Thiết Kế Thị Giác (Visualization Standards)
+**Hiện tại:** chưa có test nguồn để chứng minh runtime; dashboard/SLA/visual audit **BLOCKED hoặc N/A**. Báo cáo giữa kỳ/cuối kỳ, slide, ảnh audit và video demo là sản phẩm cần bàn giao, không phải tệp đã tồn tại. Không có số đo thì không ghi “đạt <2s” hoặc “WCAG compliant”.
 
-Mọi biểu đồ trong hệ thống được kiểm định nghiêm ngặt theo các tiêu chuẩn học thuật:
+### 3.5. Tài liệu điều hành — đọc sâu khi cần
 
-### 1. Nguyên Lý Tỷ Lệ Dữ Liệu - Mực (Edward Tufte Data-Ink Ratio)
-- ❌ **Xóa bỏ 100% khung viền hộp (No bounding box):** Giữ khoảng trắng thông thoáng tối đa quanh vùng biểu diễn.
-- 🌫️ **Làm mờ đường lưới tọa độ:** Tắt lưới tọa độ phụ; đường lưới chính sử dụng tông màu xám nhạt trung tính `#E2E8F0`.
-- 🏷️ **Dán nhãn trực tiếp (Direct Labeling):** Hiển thị tên chuỗi dữ liệu và giá trị tại điểm cuối của đường đồ thị, hạn chế tối đa việc bắt người dùng phải tra cứu chú giải (legend) tách rời.
-- 📢 **Tiêu đề Hành động (Action Titles):** Mọi tiêu đề biểu đồ đều chứa kết luận phân tích nghiệp vụ rõ ràng (Ví dụ: *"Nhiệt độ dầu OT vượt ngưỡng an toàn 95°C trong khung 14:00 - 17:00"*, không dùng tiêu đề tĩnh vô nghĩa như *"Biểu đồ nhiệt độ OT"*).
+| Nguồn hiện có | Nội dung / cách tra |
+|---|---|
+| [AGENTS.md](AGENTS.md) | Ranh giới agent, schema chi tiết, commands và checklist v2.0. |
+| `docs/project_charter/` — PDF tên kết thúc `Project Charter & Sprint Manual.pdf` | Charter nội dung v2.0; tên tệp còn giữ mã cũ. §1–4: scope/US/methods; §5: sprint; §6: RACI; §7: 16 tasks; §8: QA/DoD. Tên đầy đủ xem AGENTS. |
+| [Final Project.pdf](docs/project_charter/Final%20Project.pdf) | Yêu cầu học phần; §1.2: hai User Stories; §1.3: wireframe; yêu cầu giữa/cuối kỳ. |
+| [Detailed Tasks — Excel](docs/project_charter/ETT_GRID_VIS_2026_Detailed_Tasks_6_Muc.xlsx) | Sheets `Progress Overview`, `Detailed Tasks`; sáu nhóm TQH và giới hạn diễn giải. |
+| [Checklist phân tích / trực quan hóa — HTML](docs/project_charter/bang_phan_cong_data_analytics.html) | Sáu nhóm công việc, lựa chọn biểu đồ, màu sắc và chất lượng dashboard. |
 
-### 2. Nguyên Lý Gestalt Trong Trực Quan Hóa
-- **Enclosure (Vùng bao phủ):** Dùng dải màu bán trong suốt để thể hiện khoảng tin cậy 80% và 95%, giúp mắt người nhận diện ngay khoảng bất định mà không làm đứt gãy mạch đọc đường trung tâm.
-- **Continuity (Tính liên tục):** Đảm bảo sự mượt mà và liền mạch giữa chuỗi lịch sử thực tế (Ground Truth) và chuỗi dự báo tương lai.
-- **Proximity (Tính lân cận):** Bố trí các thẻ KPI (MSE, MAE, Giá trị hiện tại, Trạng thái cảnh báo) liền kề đồ thị chính.
+**Wireframe:** chưa có tệp độc lập; tham chiếu Charter §4.2.D (What–Why–How), §7/T0301 và yêu cầu học phần §1.3. Nội dung lưu trữ trong `docs/references/` không tự động trở thành kiến trúc thực thi. Nếu nguồn khác nhau về tên artifacts, dải phân vị hoặc mức độ khẳng định an toàn, dùng hợp đồng v2.0 trong AGENTS và ghi rõ khác biệt; không sửa tài liệu gốc để che xung đột.
 
-### 3. Bảng Màu Chuẩn Accessibility (Colorblind-Safe & WCAG 2.1 AA)
+### 3.6. Tài liệu khoa học & giấy phép
 
-| Thành phần Thị giác | Mã Màu Hex | Minh họa | Diễn giải & Độ trong suốt |
-| :--- | :---: | :---: | :--- |
-| **Chuỗi Thực Tế (Ground Truth)** | `#1E3A8A` | ![#1E3A8A](https://via.placeholder.com/15/1E3A8A/000000?text=+) | Xanh Navy đậm, tạo độ tin cậy và trọng tâm thị giác |
-| **Dự Báo Informer** | `#2563EB` | ![#2563EB](https://via.placeholder.com/15/2563EB/000000?text=+) | Xanh lam hoàng gia nổi bật, đường nét rõ ràng |
-| **Mô hình Baseline (LSTM/ARIMA)** | `#64748B` | ![#64748B](https://via.placeholder.com/15/64748B/000000?text=+) | Xám trung tính nhạt, làm nền so sánh |
-| **Ngưỡng Nguy Cấp (95°C Threshold)** | `#DC2626` | ![#DC2626](https://via.placeholder.com/15/DC2626/000000?text=+) | Đỏ gạch cảnh báo cao độ; nét đứt nổi bật |
-| **Dải Tin Cậy 80% CI** | `#93C5FD` | ![#93C5FD](https://via.placeholder.com/15/93C5FD/000000?text=+) | Xanh lam mềm, `opacity = 0.30` |
-| **Dải Tin Cậy 95% CI** | `#93C5FD` | ![#93C5FD](https://via.placeholder.com/15/93C5FD/000000?text=+) | Xanh lam mềm, `opacity = 0.15` |
+1. **Munzner, T. (2014).** *Visualization Analysis and Design.* CRC Press. Nền tảng abstraction dữ liệu, tác vụ và thiết kế encoding.
+2. **Tufte, E. R. (2001).** *The Visual Display of Quantitative Information* (2nd ed.). Graphics Press. Nền tảng tính toàn vẹn biểu diễn và Data-Ink.
+3. **Cleveland, W. S., & McGill, R. (1984).** Graphical perception: Theory, experimentation, and application to the development of graphical methods. *Journal of the American Statistical Association, 79*(387), 531–554. Cơ sở lựa chọn kênh biểu diễn định lượng.
 
-> ⚠️ **Quy tắc bất biến:** Tuyệt đối không phối hợp cặp màu tương phản **Đỏ - Xanh lá** trên cùng một biểu đồ để bảo vệ khả năng quan sát của người khiếm thị màu (Deuteranopia/Protanopia).
+Các mục trên là tham chiếu thư mục theo Charter §9, không có nghĩa đã có bản sách/bài báo tương ứng trong workspace. Nguồn dataset và ngày truy cập cần được ghi vào provenance khi thu thập dữ liệu thực tế.
 
----
-
-## 👥 Quản Trị Dự Án & Phân Công RACI
-
-Dự án được điều hành theo chuẩn **Agile/Scrum kết hợp mô hình phân nhiệm RACI** (Responsible, Accountable, Consulted, Informed) qua 6 tuần với 16 WBS Tasks cụ thể.
-
-### 1. Cơ Cấu Nhân Sự Dự Án (5 Vai Trò Chủ Chốt)
-- **Thành viên A (Data Lead):** Chịu trách nhiệm kiến trúc dữ liệu, tích hợp pipeline, kiểm toán kỹ thuật và đóng gói phát hành.
-- **Thành viên B (Deep Learning Engineer):** Chịu trách nhiệm xử lý ETL, Sliding Window và huấn luyện tối ưu hóa mô hình Informer trên GPU.
-- **Thành viên C (Visualization Lead):** Chịu trách nhiệm lập trình cơ chế ProbSparse Attention, Generative Decoder, đánh giá Benchmark và ước lượng dải bất định.
-- **Thành viên D (Design & QA Auditor):** Chịu trách nhiệm thiết kế Wireframe What-Why-How, lập trình giao diện Dashboard Streamlit (Story 1 & Story 2).
-- **Thành viên E (PM & Research Lead):** Quản lý tiến độ dự án, phân tích khám phá dữ liệu (EDA), kiểm toán chuẩn thị giác Tufte & Gestalt.
-
-### 2. Ma Trận RACI Rút Gọn (8 Gói Công Việc x 5 Thành Viên)
-
-| Gói Công Việc (Work Package) | Thành viên A | Thành viên B | Thành viên C | Thành viên D | Thành viên E | Sản Phẩm Bàn Giao Cốt Lõi |
-| :--- | :---: | :---: | :---: | :---: | :---: | :--- |
-| **WP01: Data Ingestion & Pipeline** | **A** | **R** | C | I | C | `clean_ett.parquet`, `dataloader.py` |
-| **WP02: Informer Model & Training** | **A** | C | **R** | I | C | `prob_attention.py`, `best_informer.pt` |
-| **WP03: Benchmark & Uncertainty Engine** | **A** | I | **R** | C | **R** | `predictions_benchmark.parquet`, `uncertainty.py` |
-| **WP04: Operational UI (Story 1)** | **A** | I | C | **R** | **R** | `app_operational.py`, Line Chart ngưỡng 95°C |
-| **WP05: Research UI (Story 2)** | **A** | I | C | **R** | **R** | `app_research.py`, Fan Chart 80%-95% CI |
-| **WP06: Web Integration (app.py)** | **A** | I | C | **R** | C | `app.py` đa luồng, SLA tải $\le 2\text{s}$ |
-| **WP07: Visual Audit & QA** | C | I | I | C | **R** | `audit/tufte_gestalt_audit.md`, Colorblind test |
-| **WP08: Governance & Final Release** | **R/A** | I | I | C | **R** | Repository v1.0, Báo cáo PDF, Video Demo |
-
-*Chú thích: **A** = Accountable (Chịu trách nhiệm cuối cùng), **R** = Responsible (Người thực thi chính), **C** = Consulted (Tham vấn chuyên môn), **I** = Informed (Nhận thông tin cập nhật).*
-
----
-
-### 3. Lộ Trình 6 Tuần (Sprint Milestones)
-
-```mermaid
-gantt
-    title LỘ TRÌNH 6 TUẦN TRIỂN KHAI DỰ ÁN (LSTF_INFORMER_VIS_2026)
-    dateFormat  YYYY-MM-DD
-    section Giai đoạn Khởi tạo
-    M01: Scope & Technical Design Locked       :done,    m1, 2026-09-01, 7d
-    section Giai đoạn Dữ liệu & Baseline
-    M02: Data Preprocessing & Advanced EDA     :active,  m2, 2026-09-08, 10d
-    M03: Informer Baseline & GPU Training      :         m3, 2026-09-18, 10d
-    section Giai đoạn Tối ưu & Dashboard
-    M04: Model Optimization & Prediction Intervals :     m4, 2026-09-28, 10d
-    M05: Streamlit Dashboard UI Integration (S1+S2):     m5, 2026-10-08, 10d
-    section Giai đoạn Đóng gói
-    M06: Visual Audit, Video Demo & Final Delivery :     m6, 2026-10-18, 7d
-```
-
-- **M01 (Tuần 1) - Scope & Technical Design Locked:** Khóa phạm vi bài toán, tài liệu Project Charter, ma trận RACI và kiến trúc Dataflow. *(Trạng thái: Hoàn thành)*
-- **M02 (Tuần 1–2) - Data Preprocessing & EDA:** Khám phá chuỗi thời gian, xử lý khuyết thiếu, chuẩn hóa Parquet và kiểm toán Missing matrix. *(Trạng thái: Đang thực hiện)*
-- **M03 (Tuần 2–3) - Informer Baseline & GPU Pipeline:** Cài đặt ProbSparse Attention, Distilling Encoder, Generative Decoder và kiểm thử hội tụ GPU.
-- **M04 (Tuần 3–4) - Optimization & Prediction Intervals:** Tối ưu hóa siêu tham số, đối chuẩn MSE/MAE và xuất dải bất định 80%-95%.
-- **M05 (Tuần 4–5) - Streamlit Dashboard Integration:** Hoàn thiện giao diện hai vai trò Operational Manager và Researcher, đảm bảo SLA $< 2\text{s}$.
-- **M06 (Tuần 5–6) - Final Audit & Project Delivery:** Kiểm định Tufte/Gestalt, hoàn thiện Báo cáo tổng kết, Video Demo 3–5 phút và đóng gói Repo v1.0.
-
----
-
-## 📚 Tài Liệu Tham Khảo & Bản Quyền
-
-### Tài Liệu Khoa Học & Cơ Sở Lý Thuyết
-1. **Zhou, H., Zhang, S., Peng, J., Zhang, S., Li, J., Xiong, H., & Zhang, W. (2021).**  
-   *Informer: Beyond Efficient Transformer for Long Sequence Time-Series Forecasting.*  
-   Proceedings of the AAAI Conference on Artificial Intelligence, 35(12), 11106–11115. [PDF Paper](docs/references/2021_Zhou_Informer_AAAI.pdf)
-2. **ETT Dataset Repository:**  
-   *Electricity Transformer Temperature (ETT) Dataset for Long-Sequence Time-Series Forecasting.*  
-   [GitHub: yaostanley/ETDataset](https://github.com/yaostanley/ETDataset)
-3. **Munzner, T. (2014).**  
-   *Visualization Analysis and Design.* CRC Press (A K Peters Visualization Series).
-4. **Tufte, E. R. (2001).**  
-   *The Visual Display of Quantitative Information (2nd ed.).* Graphics Press.
-5. **Vaswani, A., et al. (2017).**  
-   *Attention Is All You Need.* Advances in Neural Information Processing Systems (NeurIPS), 30.
-
-### Bản Quyền & Giấy Phép Sử Dụng
-Dự án được phân phối dưới giấy phép nguồn mở **MIT License**. Toàn bộ chi tiết được quy định tại tệp [LICENSE](LICENSE).
-
-```text
-Copyright (c) 2026 Trần Chí Vỹ. All rights reserved.
-```
-
----
-
-<div align="center">
-  <sub>Dự án học phần Trực quan hóa Dữ liệu (Data Visualization Project) • Đại học Quốc gia TP.HCM</sub><br/>
-  <sub>Xây dựng với niềm đam mê Học sâu & Nghệ thuật Trực quan hóa Dữ liệu chuẩn mực.</sub>
-</div>
+Mã nguồn repository áp dụng **[MIT License](LICENSE)** — Copyright (c) 2026 Trần Chí Vỹ. Giấy phép mã nguồn không mặc nhiên bao phủ dữ liệu và tài liệu bên thứ ba; kiểm tra điều khoản từng nguồn khi phân phối.
