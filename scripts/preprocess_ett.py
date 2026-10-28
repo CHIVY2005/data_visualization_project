@@ -1,689 +1,293 @@
-#!/usr/bin/env python3
-"""
-scripts/preprocess_ett.py
--------------------------
-Production-ready Data Preprocessing Pipeline for ETT Benchmarks:
-- ETTh1, ETTh2 (Hourly granularity, delta_t = 1 hour)
-- ETTm1, ETTm2 (15-minute granularity, delta_t = 15 minutes)
+"""Read-only ETT ingestion and atomic export of the clean v2.0 contract.
 
-Compliant with Project Constitution (AGENTS.md):
-- 🔴 RED ZONE: Strictly read-only access to `data/raw/*`.
-- 🟢 GREEN ZONE: Outputs standardized parquet and scaler JSON into `data/processed/`.
-- 🟡 AMBER ZONE: Uses verified packages in `.venv` (pandas, numpy, pyarrow, etc.).
-- Reproducibility: Global SEED = 2026.
-- Strict No Data Leakage: Scaler parameters (mean, std) fitted exclusively on Train split.
-- Chronological Split: 12 months Train / 4 months Validation / remaining Test (Informer AAAI-21).
-- Time Covariates: Raw and normalized temporal position features for Informer embeddings.
+Each invocation replaces one dataset artifact; it never appends other datasets.
+Missing measurements remain null (no implicit interpolation or future filling).
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
+import io
 import json
 import logging
 import os
 import random
-import sys
-import time
-from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Final, List, Optional, Tuple
+from typing import Any, Sequence
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-# ==============================================================================
-# PROJECT CONSTANTS & TECHNICAL SPECIFICATIONS (AGENTS.md)
-# ==============================================================================
-
-SEED: Final[int] = 2026
-
-STANDARD_COLUMNS: Final[Tuple[str, ...]] = (
-    "date",
-    "HUFL",
-    "HULL",
-    "MUFL",
-    "MULL",
-    "LUFL",
-    "LULL",
-    "OT",
+ROOT = Path(__file__).resolve().parents[1]
+SEED = 2026
+SCHEMA_VERSION = "2.0"
+WARNING_TEMP_THRESHOLD = 85.0
+CRITICAL_TEMP_THRESHOLD = 95.0
+CADENCE_MINUTES = {"ETTh1": 60, "ETTh2": 60, "ETTm1": 15}
+MEASUREMENTS = ("OT", "HUFL", "HULL", "MUFL", "MULL", "LUFL", "LULL")
+TOTAL_COLUMNS = ("total_useful_load", "total_unuseful_load")
+FLOAT_COLUMNS = (*MEASUREMENTS, *TOTAL_COLUMNS, "reactive_ratio")
+CLEAN_COLUMNS = (
+    "dataset", "timestamp", *MEASUREMENTS, *TOTAL_COLUMNS,
+    "reactive_ratio", "thermal_regime", "is_imputed",
 )
-
-NUMERICAL_FEATURES: Final[Tuple[str, ...]] = (
-    "HUFL",
-    "HULL",
-    "MUFL",
-    "MULL",
-    "LUFL",
-    "LULL",
-    "OT",
-)
-
-DEFAULT_TARGET: Final[str] = "OT"
-CRITICAL_TEMP_THRESHOLD: Final[float] = 95.0
-WARNING_TEMP_THRESHOLD: Final[float] = 80.0
-
-# Chronological split definitions (Informer: 12 months train, 4 months val)
-# 1 month is standardized to 30 days
-HOURLY_STEPS_PER_MONTH: Final[int] = 30 * 24        # 720 steps per month
-SUBHOURLY_STEPS_PER_MONTH: Final[int] = 30 * 24 * 4  # 2,880 steps per month (15m)
-
-HOURLY_TRAIN_MONTHS: Final[int] = 12
-HOURLY_VAL_MONTHS: Final[int] = 4
-
-DEFAULT_RAW_DIR: Final[str] = "data/raw"
-DEFAULT_OUTPUT_PARQUET: Final[str] = "data/processed/clean_ett.parquet"
-DEFAULT_SCALER_JSON: Final[str] = "data/processed/scaler_params.json"
+CLEAN_SCHEMA = pa.schema([
+    pa.field("dataset", pa.string(), nullable=False),
+    pa.field("timestamp", pa.timestamp("ns"), nullable=False),
+    *(pa.field(name, pa.float32()) for name in FLOAT_COLUMNS),
+    pa.field("thermal_regime", pa.string(), nullable=False),
+    pa.field("is_imputed", pa.bool_(), nullable=False),
+])
+LOGGER = logging.getLogger("preprocess_ett")
 
 
-# ==============================================================================
-# REPRODUCIBILITY & LOGGING SETUP
-# ==============================================================================
-
-def set_seed(seed: int = SEED) -> None:
-    """Set global seeds to guarantee experiment reproducibility."""
-    random.seed(seed)
-    np.random.seed(seed)
-    os.environ["PYTHONHASHSEED"] = str(seed)
+def content_hash(data: bytes) -> str:
+    """Hash LF-normalized CSV bytes without touching the source file."""
+    return hashlib.sha256(data.replace(b"\r\n", b"\n")).hexdigest()
 
 
-def setup_logger(name: str = "preprocess_ett", verbose: bool = False) -> logging.Logger:
-    """Configure standardized logger with clean ISO-like timestamps."""
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.DEBUG if verbose else logging.INFO)
+def validate_output_path(out: Path, raw_dir: Path) -> Path:
+    """Reject protected destinations, including resolved symlinks/hard links."""
+    destination = out.resolve()
+    protected = (ROOT / "data" / "raw", ROOT / "docs", raw_dir)
+    for directory in protected:
+        resolved = directory.resolve()
+        if destination == resolved or destination.is_relative_to(resolved):
+            raise ValueError(f"Output cannot target protected directory: {resolved}")
+    if destination.exists():
+        if not destination.is_file():
+            raise ValueError("Output must be a file")
+        for directory in protected:
+            if directory.is_dir():
+                for source in directory.rglob("*"):
+                    if source.is_file() and destination.samefile(source):
+                        raise ValueError("Output aliases a protected source file")
+    return destination
 
-    if not logger.handlers:
-        handler = logging.StreamHandler(sys.stdout)
-        handler.setLevel(logging.DEBUG if verbose else logging.INFO)
-        formatter = logging.Formatter(
-            fmt="[%(asctime)s] [%(levelname)s] [%(name)s]: %(message)s",
-            datefmt="%Y-%m-%d %H:%M:%S",
+
+def thermal_regimes(ot: pd.Series) -> pd.Series:
+    """Assign project regimes; missing temperature is never Normal."""
+    result = pd.Series("Unknown", index=ot.index, dtype="string")
+    result.loc[ot < WARNING_TEMP_THRESHOLD] = "Normal"
+    result.loc[
+        (ot >= WARNING_TEMP_THRESHOLD) & (ot < CRITICAL_TEMP_THRESHOLD)
+    ] = "Warning"
+    result.loc[ot >= CRITICAL_TEMP_THRESHOLD] = "Critical"
+    return result
+
+
+def derive_measurements(frame: pd.DataFrame) -> pd.DataFrame:
+    """Compute derived columns without normalization or null-skipping sums."""
+    result = frame.copy()
+    for column in MEASUREMENTS:
+        result[column] = pd.to_numeric(result[column], errors="raise").astype(
+            "float32"
         )
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-
-    return logger
-
-
-# ==============================================================================
-# METADATA & DATASET CONFIGURATION
-# ==============================================================================
-
-@dataclass(frozen=True)
-class GranularityConfig:
-    """Configuration specification based on dataset temporal frequency."""
-    label: str
-    expected_freq: pd.Timedelta
-    freq_seconds: int
-    train_rows: int
-    val_rows: int
-    is_subhourly: bool
-
-
-def resolve_granularity(dataset_name: str) -> GranularityConfig:
-    """
-    Resolve frequency parameters and train/val row cuts from dataset name.
-    
-    Parameters
-    ----------
-    dataset_name : str
-        Canonical dataset identifier (e.g., 'ETTh1', 'ETTh2', 'ETTm1', 'ETTm2').
-        
-    Returns
-    -------
-    GranularityConfig
-        Structured configuration for frequency and split boundaries.
-    """
-    clean_name = dataset_name.strip().replace(".csv", "").upper()
-    
-    if clean_name.startswith("ETTH"):
-        # Hourly dataset (1 hour steps)
-        train_rows = HOURLY_TRAIN_MONTHS * HOURLY_STEPS_PER_MONTH       # 8,640
-        val_rows = HOURLY_VAL_MONTHS * HOURLY_STEPS_PER_MONTH           # 2,880
-        return GranularityConfig(
-            label="Hourly",
-            expected_freq=pd.Timedelta(hours=1),
-            freq_seconds=3600,
-            train_rows=train_rows,
-            val_rows=val_rows,
-            is_subhourly=False,
-        )
-    elif clean_name.startswith("ETTM"):
-        # 15-minute dataset (15 min steps)
-        train_rows = HOURLY_TRAIN_MONTHS * SUBHOURLY_STEPS_PER_MONTH   # 34,560
-        val_rows = HOURLY_VAL_MONTHS * SUBHOURLY_STEPS_PER_MONTH       # 11,520
-        return GranularityConfig(
-            label="15-Minute",
-            expected_freq=pd.Timedelta(minutes=15),
-            freq_seconds=900,
-            train_rows=train_rows,
-            val_rows=val_rows,
-            is_subhourly=True,
-        )
-    else:
-        # Default fallback to hourly if unrecognized
-        logging.getLogger("preprocess_ett").warning(
-            "Unrecognized dataset prefix '%s'. Falling back to Hourly configuration.",
-            clean_name,
-        )
-        train_rows = HOURLY_TRAIN_MONTHS * HOURLY_STEPS_PER_MONTH
-        val_rows = HOURLY_VAL_MONTHS * HOURLY_STEPS_PER_MONTH
-        return GranularityConfig(
-            label="Hourly (Default)",
-            expected_freq=pd.Timedelta(hours=1),
-            freq_seconds=3600,
-            train_rows=train_rows,
-            val_rows=val_rows,
-            is_subhourly=False,
-        )
+        if np.isinf(result[column].to_numpy()).any():
+            raise ValueError(f"Infinite/overflow measurement: {column}")
+    result["total_useful_load"] = result[
+        ["HUFL", "MUFL", "LUFL"]
+    ].sum(axis=1, min_count=3).astype("float32")
+    result["total_unuseful_load"] = result[
+        ["HULL", "MULL", "LULL"]
+    ].sum(axis=1, min_count=3).astype("float32")
+    denominator = result["total_useful_load"]
+    result["reactive_ratio"] = (
+        result["total_unuseful_load"] / denominator.where(denominator > 0)
+    ).astype("float32")
+    for column in (*TOTAL_COLUMNS, "reactive_ratio"):
+        if np.isinf(result[column].to_numpy()).any():
+            raise ValueError(f"Overflow in derived measurement: {column}")
+    result["thermal_regime"] = thermal_regimes(result["OT"])
+    result["is_imputed"] = pd.Series(False, index=result.index, dtype=bool)
+    return result
 
 
-# ==============================================================================
-# PIPELINE FUNCTIONS
-# ==============================================================================
-
-def load_and_audit_raw_data(
-    raw_path: Path,
-    expected_freq: pd.Timedelta,
-    target_col: str = DEFAULT_TARGET,
-    logger: Optional[logging.Logger] = None,
-) -> pd.DataFrame:
-    """
-    Load raw ETT dataset strictly in read-only mode, audit data hygiene, and cast types.
-    
-    Audits performed:
-    1. Schema presence: Verify all 8 standard columns exist.
-    2. Date parsing: Parse to RFC3339 datetime64[ns] and sort monotonically.
-    3. Duplicate check: Identify any duplicate timestamps.
-    4. Continuity audit: Check time step consistency with expected frequency.
-    5. Missing / Anomaly audit: Zero NaN/Null/Inf verification on all features.
-    6. Type casting: Cast 7 numerical variables to float32.
-    """
-    log = logger or logging.getLogger("preprocess_ett")
-    
-    if not raw_path.is_file():
-        raise FileNotFoundError(f"Raw data file not found at: {raw_path}")
-        
-    log.info("Loading raw dataset from (READ-ONLY): %s", raw_path)
-    # Strictly read without modifying original file
-    df = pd.read_csv(raw_path)
-    log.info("Raw data loaded successfully: shape=%s, memory=%.2f MB", df.shape, df.memory_usage().sum() / (1024 * 1024))
-    
-    # 1. Schema Validation
-    missing_cols = [c for c in STANDARD_COLUMNS if c not in df.columns]
-    if missing_cols:
-        raise ValueError(f"Raw data violates standard schema. Missing columns: {missing_cols}")
-        
-    if target_col not in df.columns:
-        raise ValueError(f"Target variable '{target_col}' not found in dataframe columns: {df.columns.tolist()}")
-
-    # 2. Date Standardization & Monotonic Ordering
-    log.info("Auditing temporal index and monotonicity...")
-    df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    
-    null_dates = df["date"].isna().sum()
-    if null_dates > 0:
-        raise ValueError(f"Found {null_dates} unparseable timestamps in 'date' column.")
-        
-    # Cast explicitly to datetime64[ns]
-    df["date"] = df["date"].astype("datetime64[ns]")
-    
-    # Sort chronologically
-    df = df.sort_values(by="date", ascending=True).reset_index(drop=True)
-    
-    # 3. Duplicate Timestamp Audit
-    duplicate_count = df["date"].duplicated().sum()
-    if duplicate_count > 0:
-        log.warning("Detected %d duplicate timestamps in raw dataset! Removing duplicates...", duplicate_count)
-        df = df.drop_duplicates(subset=["date"], keep="first").reset_index(drop=True)
-    else:
-        log.info("Duplicate check PASSED: Zero duplicate timestamps found.")
-
-    # 4. Continuity & Step Uniformity Audit
-    time_diffs = df["date"].diff().dropna()
-    unique_steps = time_diffs.unique()
-    log.info("Temporal step audit: observed deltas = %s", [str(td) for td in unique_steps])
-    
-    if len(unique_steps) == 1 and unique_steps[0] == expected_freq:
-        log.info("Step uniformity check PASSED: perfectly uniform delta_t = %s", expected_freq)
-    else:
-        gap_count = (time_diffs != expected_freq).sum()
-        log.warning(
-            "Temporal step discontinuity detected: %d intervals differ from expected %s.",
-            gap_count,
-            expected_freq,
-        )
-
-    # 5. Missing Values & Anomaly Audit
-    log.info("Auditing missing values (NaN/Null/Empty) and infinite values (Inf/-Inf)...")
-    null_audit = df[list(STANDARD_COLUMNS)].isna().sum()
-    total_nulls = null_audit.sum()
-    if total_nulls > 0:
-        log.warning("Detected null values: %s. Applying forward-fill / backward-fill imputation.", null_audit.to_dict())
-        df = df.ffill().bfill()
-    else:
-        log.info("Missing value audit PASSED: Zero null values across all %d standard columns.", len(STANDARD_COLUMNS))
-
-    # Check infinite values
-    num_cols = [c for c in NUMERICAL_FEATURES if c in df.columns]
-    inf_count = np.isinf(df[num_cols].to_numpy()).sum()
-    if inf_count > 0:
-        raise ValueError(f"Detected {inf_count} infinite values (+inf / -inf) in numerical features.")
-    else:
-        log.info("Infinite value audit PASSED: Zero infinite values detected.")
-
-    # 6. Numerical Precision Casting (float32 for PyTorch tensors)
-    log.info("Casting numerical features to float32...")
-    for col in num_cols:
-        df[col] = df[col].astype(np.float32)
-
-    # Check physical safety boundaries for target OT
-    if target_col in df.columns:
-        ot_series = df[target_col]
-        breach_count = (ot_series >= CRITICAL_TEMP_THRESHOLD).sum()
-        warning_count = ((ot_series >= WARNING_TEMP_THRESHOLD) & (ot_series < CRITICAL_TEMP_THRESHOLD)).sum()
-        log.info(
-            "Target '%s' physical boundaries audit: min=%.2f°C, max=%.2f°C, mean=%.2f°C. Warning(>=80°C)=%d, Critical(>=95°C)=%d",
-            target_col,
-            float(ot_series.min()),
-            float(ot_series.max()),
-            float(ot_series.mean()),
-            int(warning_count),
-            int(breach_count),
-        )
-
-    return df
-
-
-def extract_time_covariates(df: pd.DataFrame, is_subhourly: bool = False) -> pd.DataFrame:
-    """
-    Extract temporal covariates for Informer positional and temporal embeddings.
-    
-    Generates both raw integer coordinates and scaled coordinates normalized to [-0.5, 0.5]:
-    - hour (0-23) & hour_norm
-    - day_of_week (0-6, Monday=0) & day_of_week_norm
-    - day (1-31) & day_norm
-    - month (1-12) & month_norm
-    - [Optional for 15-minute data]: minute (0-59) & minute_norm
-    """
-    dt_series = df["date"].dt
-    
-    # Raw integer features
-    df["hour"] = dt_series.hour.astype(np.int32)
-    df["day_of_week"] = dt_series.dayofweek.astype(np.int32)
-    df["day"] = dt_series.day.astype(np.int32)
-    df["month"] = dt_series.month.astype(np.int32)
-    
-    # Normalized features bounded in [-0.5, 0.5]
-    df["hour_norm"] = ((df["hour"] / 23.0) - 0.5).astype(np.float32)
-    df["day_of_week_norm"] = ((df["day_of_week"] / 6.0) - 0.5).astype(np.float32)
-    df["day_norm"] = (((df["day"] - 1.0) / 30.0) - 0.5).astype(np.float32)
-    df["month_norm"] = (((df["month"] - 1.0) / 11.0) - 0.5).astype(np.float32)
-
-    if is_subhourly:
-        df["minute"] = dt_series.minute.astype(np.int32)
-        df["minute_norm"] = ((df["minute"] / 59.0) - 0.5).astype(np.float32)
-
-    return df
-
-
-def assign_chronological_splits(
-    df: pd.DataFrame,
-    train_rows: int,
-    val_rows: int,
-    logger: Optional[logging.Logger] = None,
-) -> pd.DataFrame:
-    """
-    Partition dataset into Train / Validation / Test sets chronologically.
-    
-    Strictly follows Informer AAAI-21:
-    - Train: First 12 months (indices 0 to train_rows - 1).
-    - Validation: Next 4 months (indices train_rows to train_rows + val_rows - 1).
-    - Test: Remaining records to the end of the observation window.
-    
-    Assigns an in-place categorical 'split' column.
-    """
-    log = logger or logging.getLogger("preprocess_ett")
-    total_rows = len(df)
-    
-    min_required = train_rows + val_rows
-    if total_rows < min_required:
-        raise ValueError(
-            f"Insufficient records for standard split. Required at least {min_required}, but dataset has {total_rows}."
-        )
-
-    split_arr = np.empty(total_rows, dtype=object)
-    split_arr[:train_rows] = "train"
-    split_arr[train_rows : train_rows + val_rows] = "val"
-    split_arr[train_rows + val_rows :] = "test"
-    
-    df["split"] = pd.Categorical(split_arr, categories=["train", "val", "test"], ordered=True)
-    
-    train_count = (df["split"] == "train").sum()
-    val_count = (df["split"] == "val").sum()
-    test_count = (df["split"] == "test").sum()
-    
-    log.info(
-        "Chronological split assigned: Total=%d | Train=%d (%.1f%%) | Val=%d (%.1f%%) | Test=%d (%.1f%%)",
-        total_rows,
-        train_count,
-        (train_count / total_rows) * 100,
-        val_count,
-        (val_count / total_rows) * 100,
-        test_count,
-        (test_count / total_rows) * 100,
-    )
-    
-    # Log temporal boundaries for each split
-    for split_name in ["train", "val", "test"]:
-        sub_df = df[df["split"] == split_name]
-        log.info(
-            "Split '%s': start=%s | end=%s | rows=%d",
-            split_name,
-            sub_df["date"].iloc[0].strftime("%Y-%m-%d %H:%M:%S"),
-            sub_df["date"].iloc[-1].strftime("%Y-%m-%d %H:%M:%S"),
-            len(sub_df),
-        )
-
-    return df
-
-
-def fit_scaler_and_normalize(
-    df: pd.DataFrame,
-    features: List[str],
-    dataset_name: str,
-    target_col: str,
-    logger: Optional[logging.Logger] = None,
-) -> Tuple[pd.DataFrame, Dict[str, Any]]:
-    """
-    Compute StandardScaler parameters (mean, std) exclusively on the Train split.
-    
-    Guarantees zero data leakage:
-    - Fits mu_train and sigma_train only where split == 'train'.
-    - Scales Train, Val, and Test using mu_train and sigma_train.
-    - Appends scaled features as '{col}_scaled' (float32).
-    - Retains pristine raw features in physical units for dashboards & EDA.
-    
-    Returns
-    -------
-    Tuple[pd.DataFrame, Dict[str, Any]]
-        Transformed DataFrame with scaled columns, and dictionary of scaler parameters.
-    """
-    log = logger or logging.getLogger("preprocess_ett")
-    log.info("Fitting StandardScaler on TRAIN split only (Strict No Data Leakage)...")
-
-    train_mask = df["split"] == "train"
-    train_df = df.loc[train_mask]
-    
-    scaler_dict: Dict[str, Dict[str, float]] = {}
-    
-    for col in features:
-        train_vals = train_df[col].to_numpy(dtype=np.float64)
-        mean_val = float(np.mean(train_vals))
-        std_val = float(np.std(train_vals, ddof=0))
-        
-        # Defensive check against division by zero
-        if std_val < 1e-8:
-            log.warning("Feature '%s' has near-zero standard deviation (%.6e). Setting std to 1.0.", col, std_val)
-            std_val = 1.0
-
-        scaler_dict[col] = {
-            "mean": round(mean_val, 6),
-            "std": round(std_val, 6),
-        }
-        
-        # Compute normalized values across all splits
-        scaled_vals = (df[col].to_numpy(dtype=np.float64) - mean_val) / std_val
-        df[f"{col}_scaled"] = scaled_vals.astype(np.float32)
-
-    log.info("StandardScaler fitted successfully for %d numerical features.", len(features))
-    for col, params in scaler_dict.items():
-        log.debug("Scaler '%s': mean=%.4f, std=%.4f", col, params["mean"], params["std"])
-
-    scaler_artifact: Dict[str, Any] = {
-        "dataset": dataset_name,
-        "target": target_col,
-        "fitted_on": "train",
-        "train_rows": int(train_mask.sum()),
-        "features": scaler_dict,
-        "metadata": {
-            "seed": SEED,
-            "created_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
-            "critical_threshold_95c": CRITICAL_TEMP_THRESHOLD,
-            "warning_threshold_80c": WARNING_TEMP_THRESHOLD,
+def load_clean_dataset(
+    source: Path, dataset: str,
+) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Audit one CSV snapshot, retain nulls/gaps, reject ambiguous timestamps."""
+    if dataset not in CADENCE_MINUTES:
+        raise ValueError(f"Unsupported dataset: {dataset}")
+    data = source.read_bytes()
+    frame = pd.read_csv(io.BytesIO(data))
+    if set(frame.columns) != {"date", *MEASUREMENTS}:
+        raise ValueError("Raw CSV must contain date and exactly seven measurements")
+    if frame.empty:
+        raise ValueError("Raw CSV must contain at least one sample")
+    timestamps = pd.to_datetime(frame.pop("date"), errors="raise")
+    if timestamps.isna().any():
+        raise ValueError("Missing timestamp")
+    if not pd.api.types.is_datetime64_any_dtype(timestamps.dtype):
+        raise ValueError("Mixed or unsupported timestamp offsets")
+    if timestamps.dt.tz is not None:
+        raise ValueError("Timezone-aware source requires an explicit timezone policy")
+    frame["timestamp"] = timestamps.astype("datetime64[ns]")
+    if frame["timestamp"].duplicated().any():
+        raise ValueError("Duplicate timestamp; refusing to discard observations")
+    frame = frame.sort_values("timestamp", kind="stable").reset_index(drop=True)
+    cadence = pd.Timedelta(minutes=CADENCE_MINUTES[dataset])
+    deltas = frame["timestamp"].diff().dropna()
+    if ((deltas < cadence) | (deltas % cadence != pd.Timedelta(0))).any():
+        raise ValueError("Timestamp cadence does not match dataset resolution")
+    gap_count = int((deltas > cadence).sum())
+    frame = derive_measurements(frame)
+    frame["dataset"] = pd.Series(dataset, index=frame.index, dtype="string")
+    audit = {
+        "row_count": len(frame),
+        "gap_count": gap_count,
+        "missing_measurements": {
+            column: int(frame[column].isna().sum()) for column in MEASUREMENTS
         },
+        "duplicate_count": 0,
+        "imputed_count": 0,
     }
+    metadata: dict[str, Any] = {
+        "schema_version": SCHEMA_VERSION,
+        "dataset": dataset,
+        "seed": str(SEED),
+        "source_hash": content_hash(data),
+        "source_hash_algorithm": "sha256_lf_normalized",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "timezone": "unknown",
+        "parameters": json.dumps({
+            "cadence_minutes": CADENCE_MINUTES[dataset],
+            "warning_threshold_c": WARNING_TEMP_THRESHOLD,
+            "critical_threshold_c": CRITICAL_TEMP_THRESHOLD,
+            "missing_policy": "preserve_null_no_imputation",
+            "gap_policy": "preserve_observed_samples_no_gap_filling",
+            "duplicate_policy": "reject",
+            "write_policy": "replace_single_dataset",
+        }, sort_keys=True, allow_nan=False),
+        "quality_audit": json.dumps(audit, sort_keys=True, allow_nan=False),
+    }
+    LOGGER.info("Dataset %s audit: %s", dataset, audit)
+    return frame.loc[:, CLEAN_COLUMNS], metadata
 
-    return df, scaler_artifact
+
+def validate_clean_frame(frame: pd.DataFrame, dataset: str) -> None:
+    """Validate the fixed clean contract before touching an output file."""
+    if tuple(frame.columns) != CLEAN_COLUMNS or frame.empty:
+        raise ValueError("Invalid clean schema or empty dataset")
+    if frame["dataset"].isna().any() or not frame["dataset"].eq(dataset).all():
+        raise ValueError("Dataset key mismatch")
+    timestamp = frame["timestamp"]
+    if timestamp.dtype != np.dtype("datetime64[ns]"):
+        raise ValueError("Timestamp must be timezone-naive datetime64[ns]")
+    if timestamp.isna().any() or not timestamp.is_unique:
+        raise ValueError("Timestamp must be non-null and unique")
+    if not timestamp.is_monotonic_increasing:
+        raise ValueError("Timestamp must be increasing")
+    for column in FLOAT_COLUMNS:
+        if frame[column].dtype != np.dtype("float32"):
+            raise ValueError(f"Invalid dtype: {column}")
+        if np.isinf(frame[column].to_numpy()).any():
+            raise ValueError(f"Infinite value: {column}")
+    if frame["is_imputed"].dtype != np.dtype(bool):
+        raise ValueError("is_imputed must be bool")
+    if frame["is_imputed"].any():
+        raise ValueError("This producer does not impute measurements")
+    expected = derive_measurements(frame)
+    for column in (*TOTAL_COLUMNS, "reactive_ratio"):
+        if not np.allclose(frame[column], expected[column], equal_nan=True):
+            raise ValueError(f"Incorrect derived measurement: {column}")
+    actual_regime = frame["thermal_regime"].astype("string")
+    if not actual_regime.equals(expected["thermal_regime"]):
+        raise ValueError("Incorrect thermal regime")
 
 
-def export_artifacts(
-    df: pd.DataFrame,
-    parquet_path: Path,
-    scaler_path: Path,
-    scaler_artifact: Dict[str, Any],
-    logger: Optional[logging.Logger] = None,
-) -> None:
+def export_atomic(
+    frame: pd.DataFrame, metadata: dict[str, Any], out: Path, raw_dir: Path,
+) -> Path:
+    """Validate, exclusively create .tmp, fsync, verify, then os.replace.
+
+    A stale/existing temporary file is not overwritten or removed. On handled
+    failures only the temporary file owned by this invocation is cleaned up.
     """
-    Export processed clean dataset to Parquet and scaler parameters to JSON.
-    
-    Uses PyArrow engine with Snappy compression for Parquet.
-    """
-    log = logger or logging.getLogger("preprocess_ett")
-    
-    # 1. Ensure target directories exist
-    parquet_path.parent.mkdir(parents=True, exist_ok=True)
-    scaler_path.parent.mkdir(parents=True, exist_ok=True)
-    
-    # 2. Export Scaler Parameters JSON
-    log.info("Exporting scaler parameters to: %s", scaler_path)
-    with open(scaler_path, "w", encoding="utf-8") as f:
-        json.dump(scaler_artifact, f, indent=2, ensure_ascii=False)
-    log.info("Scaler JSON written: %.2f KB", scaler_path.stat().st_size / 1024.0)
-
-    # 3. Export Clean Parquet
-    log.info("Exporting clean dataset to Parquet: %s", parquet_path)
-    # PyArrow export with snappy compression
-    table = pa.Table.from_pandas(df, preserve_index=False)
-    pq.write_table(table, parquet_path, compression="snappy")
-    
-    file_size_mb = parquet_path.stat().st_size / (1024.0 * 1024.0)
-    log.info("Parquet export completed successfully: %.2f MB", file_size_mb)
-
-
-# ==============================================================================
-# CLI ARGUMENT PARSER & ORCHESTRATION
-# ==============================================================================
-
-def parse_args() -> argparse.Namespace:
-    """Parse command line arguments for preprocess_ett.py."""
-    parser = argparse.ArgumentParser(
-        description="Preprocess and sanitize ETT time-series datasets for Informer forecasting.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    parser.add_argument(
-        "--data",
-        type=str,
-        default="ETTh1",
-        help="Target dataset name (ETTh1, ETTh2, ETTm1, ETTm2).",
-    )
-    parser.add_argument(
-        "--raw_dir",
-        type=str,
-        default=DEFAULT_RAW_DIR,
-        help="Path to raw dataset directory containing source CSV files.",
-    )
-    parser.add_argument(
-        "--out",
-        type=str,
-        default=DEFAULT_OUTPUT_PARQUET,
-        help="Output path for the clean Parquet file.",
-    )
-    parser.add_argument(
-        "--scaler_out",
-        type=str,
-        default=DEFAULT_SCALER_JSON,
-        help="Output path for the scaler parameters JSON file.",
-    )
-    parser.add_argument(
-        "--target",
-        type=str,
-        default=DEFAULT_TARGET,
-        help="Name of the forecast target variable.",
-    )
-    parser.add_argument(
-        "--seed",
-        type=int,
-        default=SEED,
-        help="Random seed for reproducibility.",
-    )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable detailed debug logging.",
-    )
-    return parser.parse_args()
+    destination = validate_output_path(out, raw_dir)
+    dataset = str(metadata["dataset"])
+    validate_clean_frame(frame, dataset)
+    table = pa.Table.from_pandas(
+        frame, schema=CLEAN_SCHEMA, preserve_index=False, safe=True,
+    ).replace_schema_metadata({
+        key.encode("utf-8"): str(value).encode("utf-8")
+        for key, value in metadata.items()
+    })
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(destination.name + ".tmp")
+    owns_temporary = False
+    try:
+        with temporary.open("xb") as handle:
+            owns_temporary = True
+            pq.write_table(table, handle, compression="snappy")
+            handle.flush()
+            os.fsync(handle.fileno())
+        verification = pq.read_table(temporary)
+        if not verification.equals(table, check_metadata=True):
+            raise ValueError("Temporary Parquet round-trip verification failed")
+        validate_output_path(destination, raw_dir)
+        os.replace(temporary, destination)
+    finally:
+        if owns_temporary and temporary.exists():
+            temporary.unlink()
+    return destination
 
 
 def run_pipeline(
     dataset_name: str = "ETTh1",
-    raw_dir: str = DEFAULT_RAW_DIR,
-    out_path: str = DEFAULT_OUTPUT_PARQUET,
-    scaler_out_path: str = DEFAULT_SCALER_JSON,
-    target_col: str = DEFAULT_TARGET,
-    seed: int = SEED,
-    verbose: bool = False,
-) -> Dict[str, Any]:
-    """
-    Programmatic entrypoint for the complete preprocessing pipeline.
-    """
-    start_time = time.perf_counter()
-    logger = setup_logger("preprocess_ett", verbose=verbose)
-    logger.info("=" * 70)
-    logger.info("STARTING ETT DATA PREPROCESSING PIPELINE (Task T0101)")
-    logger.info("=" * 70)
-
-    # 1. Reproducibility
-    set_seed(seed)
-    logger.info("Global seed initialized to: %d", seed)
-
-    # 2. Granularity Resolution
-    gran_cfg = resolve_granularity(dataset_name)
-    logger.info(
-        "Dataset '%s' resolved to: %s (delta_t=%s, train_rows=%d, val_rows=%d)",
-        dataset_name,
-        gran_cfg.label,
-        gran_cfg.expected_freq,
-        gran_cfg.train_rows,
-        gran_cfg.val_rows,
+    raw_dir: Path | str = ROOT / "data" / "raw",
+    out_path: Path | str = ROOT / "data" / "processed" / "clean_ett.parquet",
+) -> dict[str, Any]:
+    """Export exactly one dataset, preserving physical measurements and raw."""
+    random.seed(SEED)
+    np.random.seed(SEED)
+    raw_directory = Path(raw_dir).resolve()
+    output = validate_output_path(Path(out_path), raw_directory)
+    if dataset_name not in CADENCE_MINUTES:
+        raise ValueError(f"Unsupported dataset: {dataset_name}")
+    frame, metadata = load_clean_dataset(
+        raw_directory / f"{dataset_name}.csv", dataset_name,
     )
-
-    # 3. Locate Raw CSV
-    clean_ds_name = dataset_name.strip()
-    if not clean_ds_name.endswith(".csv"):
-        clean_ds_name = f"{clean_ds_name}.csv"
-    raw_file = Path(raw_dir) / clean_ds_name
-    
-    parquet_dest = Path(out_path)
-    scaler_dest = Path(scaler_out_path)
-
-    # 4. Load, Audit, and Clean Raw Data
-    df = load_and_audit_raw_data(
-        raw_path=raw_file,
-        expected_freq=gran_cfg.expected_freq,
-        target_col=target_col,
-        logger=logger,
-    )
-
-    # 5. Extract Time Covariates
-    logger.info("Extracting temporal covariates (hour, day_of_week, day, month, normalized)...")
-    df = extract_time_covariates(df, is_subhourly=gran_cfg.is_subhourly)
-
-    # 6. Assign Chronological Splits
-    df = assign_chronological_splits(
-        df=df,
-        train_rows=gran_cfg.train_rows,
-        val_rows=gran_cfg.val_rows,
-        logger=logger,
-    )
-
-    # 7. Fit Scaler (No Data Leakage) & Normalize
-    feature_list = [c for c in NUMERICAL_FEATURES if c in df.columns]
-    df, scaler_artifact = fit_scaler_and_normalize(
-        df=df,
-        features=feature_list,
-        dataset_name=dataset_name,
-        target_col=target_col,
-        logger=logger,
-    )
-
-    # 8. Export Artifacts
-    export_artifacts(
-        df=df,
-        parquet_path=parquet_dest,
-        scaler_path=scaler_dest,
-        scaler_artifact=scaler_artifact,
-        logger=logger,
-    )
-
-    # 9. Verify Output Integrity
-    logger.info("Verifying exported Parquet file integrity...")
-    df_verify = pd.read_parquet(parquet_dest)
-    elapsed_sec = time.perf_counter() - start_time
-    
-    summary = {
-        "status": "SUCCESS",
-        "dataset": dataset_name,
-        "total_records": len(df_verify),
-        "total_columns": len(df_verify.columns),
-        "columns": df_verify.columns.tolist(),
-        "splits": df_verify["split"].value_counts().to_dict(),
-        "parquet_size_bytes": parquet_dest.stat().st_size,
-        "scaler_size_bytes": scaler_dest.stat().st_size,
-        "elapsed_seconds": round(elapsed_sec, 3),
+    destination = export_atomic(frame, metadata, output, raw_directory)
+    return {
+        "status": "SUCCESS", "dataset": dataset_name, "rows": len(frame),
+        "columns": list(frame.columns), "output": str(destination),
+        "size_bytes": destination.stat().st_size,
+        "source_hash": metadata["source_hash"],
     }
 
-    logger.info("=" * 70)
-    logger.info(
-        "PREPROCESSING COMPLETED IN %.3f SECONDS. Shape: %s, Columns: %d",
-        elapsed_sec,
-        df_verify.shape,
-        len(df_verify.columns),
+
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    """Parse the single-dataset v2.0 CLI contract."""
+    parser = argparse.ArgumentParser(
+        description="Export physical ETT measurements using clean schema v2.0.",
+        epilog="Each invocation replaces one dataset; no implicit append/merge.",
     )
-    logger.info("Output Parquet: %s (%.2f MB)", parquet_dest, summary["parquet_size_bytes"] / (1024 * 1024))
-    logger.info("Output Scaler:  %s (%.2f KB)", scaler_dest, summary["scaler_size_bytes"] / 1024)
-    logger.info("=" * 70)
+    parser.add_argument("--data", choices=tuple(CADENCE_MINUTES), default="ETTh1")
+    parser.add_argument("--raw_dir", type=Path, default=ROOT / "data" / "raw")
+    parser.add_argument(
+        "--out", type=Path,
+        default=ROOT / "data" / "processed" / "clean_ett.parquet",
+    )
+    return parser.parse_args(argv)
 
-    return summary
 
-
-def main() -> int:
-    """CLI entrypoint."""
-    args = parse_args()
+def main(argv: Sequence[str] | None = None) -> int:
+    """Run CLI; failures leave an existing output artifact untouched."""
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+    args = parse_args(argv)
     try:
-        run_pipeline(
-            dataset_name=args.data,
-            raw_dir=args.raw_dir,
-            out_path=args.out,
-            scaler_out_path=args.scaler_out,
-            target_col=args.target,
-            seed=args.seed,
-            verbose=args.verbose,
-        )
-        return 0
-    except Exception as exc:
-        logging.getLogger("preprocess_ett").error("Pipeline execution failed: %s", exc, exc_info=True)
+        summary = run_pipeline(args.data, args.raw_dir, args.out)
+    except (OSError, ValueError, TypeError) as exc:
+        LOGGER.error("ETL failed: %s", exc)
         return 1
+    print(json.dumps(summary, ensure_ascii=False, allow_nan=False))
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(main())
-
-"""
-Lệnh thực thi
-
-python scripts/preprocess_ett.py --data ETTh1 --out data/processed/clean_ett.parquet
-
-"""
+    raise SystemExit(main())
