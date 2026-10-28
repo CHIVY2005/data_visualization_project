@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bảng phân công công việc — Data Analytics & Visualization</title>
+<style>
+  :root {
+    --blue: #1769aa;
+    --blue-light: #eaf4fc;
+    --yellow: #f5c542;
+    --red: #d64545;
+    --text: #1f2937;
+    --muted: #64748b;
+    --border: #d9e2ec;
+    --bg: #f5f8fc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", Arial, sans-serif; line-height: 1.55;
+  }
+  .container { max-width: 960px; margin: 36px auto; padding: 0 18px 40px; }
+  header { margin-bottom: 24px; }
+  h1 { margin: 0 0 8px; font-size: clamp(24px, 4vw, 34px); color: #123c65; }
+  header p { margin: 0; color: var(--muted); }
+  .toolbar { display: flex; gap: 10px; flex-wrap: wrap; margin: 18px 0; }
+  button {
+    border: 1px solid var(--border); background: white; color: var(--text);
+    border-radius: 9px; padding: 9px 14px; cursor: pointer; font-size: 14px;
+  }
+  button:hover { background: var(--blue-light); border-color: var(--blue); }
+  .task {
+    background: white; border: 1px solid var(--border); border-radius: 13px;
+    margin: 12px 0; overflow: hidden; box-shadow: 0 2px 7px rgba(20,50,80,.04);
+  }
+  .task summary {
+    list-style: none; display: flex; align-items: center; gap: 12px;
+    padding: 17px 18px; cursor: pointer; font-weight: 650; color: #173b5e;
+  }
+  .task summary::-webkit-details-marker { display: none; }
+  .number {
+    display: grid; place-items: center; flex: 0 0 34px; height: 34px;
+    border-radius: 9px; background: var(--blue-light); color: var(--blue);
+    font-weight: 750;
+  }
+  .task-name { flex: 1; }
+  .arrow { color: var(--blue); transition: transform .18s ease; font-size: 18px; }
+  details[open] .arrow { transform: rotate(180deg); }
+  .content { border-top: 1px solid var(--border); padding: 18px 22px 22px; }
+  .content h3 { font-size: 16px; margin: 16px 0 7px; color: #174a78; }
+  .content h3:first-child { margin-top: 0; }
+  ul { margin: 6px 0 12px; padding-left: 22px; }
+  li { margin: 5px 0; }
+  .note { color: var(--muted); font-size: 13px; margin-top: 24px; }
+  .tag { display: inline-block; font-size: 12px; color: #174a78; background: var(--blue-light); padding: 3px 8px; border-radius: 20px; margin-left: 4px; }
+  @media (max-width: 600px) {
+    .container { margin-top: 22px; }
+    .task summary { padding: 14px; }
+    .content { padding: 15px; }
+  }
+  @media print {
+    body { background: white; }
+    .container { max-width: none; margin: 0; }
+    .toolbar { display: none; }
+    details { break-inside: avoid; }
+    details .content { display: block; }
+  }
+</style>
+</head>
+<body>
+<main class="container">
+  <header>
+    <h1>Bảng phân công công việc</h1>
+    <p>Data Analytics &amp; Data Visualization — Nhấn vào từng nhiệm vụ để xem công việc chi tiết.</p>
+  </header>
+
+  <div class="toolbar">
+    <button type="button" id="expandAll">Mở tất cả nhiệm vụ</button>
+    <button type="button" id="collapseAll">Thu gọn tất cả</button>
+    <button type="button" onclick="window.print()">In / Lưu PDF</button>
+  </div>
+
+  <details class="task">
+    <summary><span class="number">1</span><span class="task-name">Xác định và lập kế hoạch thu thập dữ liệu</span><span class="arrow">⌄</span></summary>
+    <div class="content">
+      <h3>Type of data</h3>
+      <ul>
+        <li>Xác định loại dữ liệu cần sử dụng.</li>
+        <li>Xác định đơn vị quan sát, thuộc tính cần thu thập và phạm vi dữ liệu.</li>
+      </ul>
+      <h3>How to perform analysis</h3>
+      <ul>
+        <li>Xác định phương pháp và cách thức thu thập dữ liệu.</li>
+        <li>Xác định nguồn dữ liệu tiềm năng và cách tiếp cận nguồn.</li>
+      </ul>
+      <h3>Analyze</h3>
+      <ul>
+        <li>Xác định vấn đề, mục tiêu nghiên cứu và câu hỏi cần trả lời.</li>
+        <li>Đánh giá sơ bộ độ tin cậy, tính đầy đủ và tính phù hợp của nguồn dữ liệu.</li>
+      </ul>
+      <h3>What to measure of analysis</h3>
+      <ul>
+        <li>Xác định chỉ số cần đo lường, công thức tính và đơn vị đo.</li>
+        <li>Xác định phạm vi thời gian, đối tượng và tiêu chí đánh giá kết quả.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="task">
+    <summary><span class="number">2</span><span class="task-name">Thu thập và ghi nhận dữ liệu</span><span class="arrow">⌄</span></summary>
+    <div class="content">
+      <h3>What to expect</h3>
+      <ul>
+        <li>Thu thập/tải dữ liệu theo kế hoạch đã thống nhất.</li>
+        <li>Kiểm tra tệp có mở được, đủ bản ghi và đủ thuộc tính cần thiết hay không.</li>
+        <li>Ghi nhận cấu trúc, số dòng, số cột và các vấn đề phát hiện ban đầu.</li>
+        <li>Lưu bản dữ liệu gốc riêng biệt, không chỉnh sửa trực tiếp.</li>
+      </ul>
+      <h3>Nhật ký nguồn dữ liệu và thời gian thu thập</h3>
+      <ul>
+        <li>Ghi tên nguồn, URL, tác giả/đơn vị cung cấp và ngày truy cập.</li>
+        <li>Ghi ngày thu thập, khoảng thời gian mà dữ liệu phản ánh và giấy phép sử dụng nếu có.</li>
+        <li>Ghi tên tệp, phiên bản, định dạng và các giới hạn của nguồn dữ liệu.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="task">
+    <summary><span class="number">3</span><span class="task-name">Làm sạch và chuẩn hóa dữ liệu</span><span class="arrow">⌄</span></summary>
+    <div class="content">
+      <h3>Kiểm tra tổng quan dữ liệu</h3>
+      <ul>
+        <li>Kiểm tra số dòng, số cột và kích thước dữ liệu.</li>
+        <li>Kiểm tra kiểu dữ liệu của từng thuộc tính.</li>
+        <li>Kiểm tra tên cột và tính nhất quán trong cách đặt tên.</li>
+        <li>Thống kê số lượng/tỷ lệ dữ liệu thiếu, sai định dạng và trùng lặp.</li>
+        <li>Xác định quy tắc hợp lệ cho từng thuộc tính trước khi chỉnh sửa.</li>
+      </ul>
+      <h3>Xử lý dữ liệu thiếu</h3>
+      <ul>
+        <li>Xác định nguyên nhân gây thiếu dữ liệu.</li>
+        <li>Tính số lượng và tỷ lệ dữ liệu thiếu.</li>
+        <li>Kiểm tra dữ liệu thiếu ngẫu nhiên hay tập trung ở nhóm đối tượng cụ thể.</li>
+        <li>Chọn cách xử lý phù hợp: xóa dòng/cột, điền trung vị, trung bình, giá trị phổ biến hoặc giá trị theo nghiệp vụ.</li>
+        <li>Bổ sung nhãn “không xác định” cho dữ liệu phân loại khi hợp lý.</li>
+        <li>So sánh dữ liệu trước và sau xử lý.</li>
+      </ul>
+      <h3>Xử lý ngoại lệ</h3>
+      <ul>
+        <li>Phát hiện giá trị bất thường bằng biểu đồ hộp, phân phối, IQR hoặc độ lệch chuẩn.</li>
+        <li>Phân biệt lỗi nhập liệu với giá trị bất thường nhưng có thật.</li>
+        <li>Kiểm tra giá trị không hợp lý theo nghiệp vụ.</li>
+        <li>Ghi lại lý do và ảnh hưởng của từng phương pháp xử lý ngoại lệ.</li>
+      </ul>
+      <h3>Xử lý lỗi dữ liệu không nhất quán</h3>
+      <ul>
+        <li>Sửa sai định dạng và kiểu dữ liệu khi cần.</li>
+        <li>Kiểm tra đơn vị đo lường và quy đổi về cùng hệ đơn vị.</li>
+        <li>Kiểm tra và xử lý giá trị không hợp lệ.</li>
+      </ul>
+      <h3>Xử lý giá trị trùng lặp</h3>
+      <ul>
+        <li>Xác định quy tắc giữ lại, hợp nhất hoặc loại bỏ bản ghi trùng.</li>
+        <li>Kiểm tra lại sau xử lý.</li>
+        <li>Đối chiếu số lượng bản ghi trước và sau xử lý.</li>
+      </ul>
+      <h3>Chọn lọc và tạo thuộc tính</h3>
+      <ul>
+        <li>Loại bỏ cột không liên quan và giữ thuộc tính cần thiết.</li>
+        <li>Tạo thuộc tính mới từ thuộc tính có sẵn nếu cần.</li>
+        <li>Lưu mã xử lý và ghi lại các thay đổi.</li>
+      </ul>
+      <h3>Kiểm định sau làm sạch</h3>
+      <ul>
+        <li>Chạy lại kiểm tra chất lượng dữ liệu.</li>
+        <li>Kiểm tra quy tắc nghiệp vụ và tính nhất quán giữa các thuộc tính.</li>
+        <li>Đảm bảo dữ liệu không bị mất hoặc thay đổi ngoài dự kiến.</li>
+        <li>Lưu riêng tệp dữ liệu sạch và nhật ký xử lý.</li>
+        <li>Ghi nhận các hạn chế chưa giải quyết được.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="task">
+    <summary><span class="number">4</span><span class="task-name">Phân tích và trích xuất thông tin</span><span class="arrow">⌄</span></summary>
+    <div class="content">
+      <h3>Xác định thông tin cần trích xuất</h3>
+      <ul>
+        <li>Chuyển mục tiêu nghiên cứu thành các câu hỏi phân tích cụ thể.</li>
+        <li>Xác định biến mục tiêu, biến giải thích và các yếu tố có ảnh hưởng.</li>
+        <li>Xác định chỉ số, công thức, đơn vị đo và mức độ phân tích: toàn bộ dữ liệu, theo thời gian, nhóm sản phẩm, khu vực hoặc đối tượng.</li>
+        <li>Xác định kết quả nào cần được chứng minh bằng dữ liệu.</li>
+      </ul>
+      <h3>Phương pháp dùng để trích xuất thông tin</h3>
+      <ul>
+        <li>Tính thống kê mô tả.</li>
+        <li>Xem xét phân phối dữ liệu.</li>
+        <li>Phân tích tần suất và tỷ trọng của các nhóm.</li>
+        <li>So sánh các nhóm để tìm khác biệt.</li>
+        <li>Phân tích xu hướng theo thời gian.</li>
+        <li>Tạo bảng tổng hợp và biểu đồ khám phá ban đầu.</li>
+        <li>Tính tương quan giữa các biến.</li>
+        <li>Phân tích mối liên hệ giữa biến số và biến phân loại.</li>
+        <li>So sánh các nhóm theo một hoặc nhiều tiêu chí.</li>
+      </ul>
+      <h3>Lựa chọn kỹ thuật phân tích</h3>
+      <ul>
+        <li><b>Thống kê mô tả:</b> tính chỉ số tổng hợp để hiểu đặc điểm chung của dữ liệu.</li>
+        <li><b>Phân tích nhóm:</b> nhóm theo sản phẩm, khu vực, thời gian hoặc đối tượng để xác định nhóm tốt và nhóm cần cải thiện.</li>
+        <li><b>Phân tích xu hướng:</b> theo dõi chỉ số theo thời gian để phát hiện tăng, giảm hoặc mùa vụ.</li>
+        <li><b>Phân tích tương quan:</b> đo lường mức độ liên hệ giữa các biến.</li>
+        <li><b>Phân tích phân phối:</b> kiểm tra tần suất, độ lệch và độ phân tán.</li>
+        <li><b>Phân tích chuỗi thời gian:</b> phát hiện mùa vụ và xu hướng dài hạn khi dữ liệu phù hợp.</li>
+        <li><b>Phân tích phân khúc:</b> chia đối tượng thành nhóm có đặc điểm tương tự.</li>
+        <li><b>Kiểm định giả thuyết:</b> đánh giá bằng chứng thống kê về sự khác biệt.</li>
+        <li><b>Phân tích nguyên nhân:</b> kiểm tra các yếu tố liên quan đến vấn đề; không mặc định tương quan là nhân quả.</li>
+        <li><b>Dự báo:</b> ước lượng giá trị tương lai khi mục tiêu và dữ liệu cho phép.</li>
+      </ul>
+      <h3>Xác định thông tin còn thiếu và tìm nguồn bổ sung</h3>
+      <ul>
+        <li>Đối chiếu câu hỏi nghiên cứu với thông tin hiện có.</li>
+        <li>Lập danh sách thuộc tính/chỉ số chưa thể tính và xác định nguyên nhân.</li>
+        <li>Tìm nguồn bổ sung từ cơ quan thống kê, báo cáo chính thức, nghiên cứu, API hoặc bộ dữ liệu liên quan.</li>
+        <li>Kiểm tra độ tin cậy, thời điểm cập nhật, đơn vị đo và khả năng kết hợp nguồn mới.</li>
+        <li>Đánh giá sự tương thích về định nghĩa và phạm vi giữa các nguồn.</li>
+        <li>Thu thập bổ sung và ghi nguồn/ngày truy cập nếu cần.</li>
+        <li>Nếu không thể bổ sung, ghi rõ giả định, giới hạn và ảnh hưởng đến kết luận.</li>
+      </ul>
+      <h3>Diễn giải và kiểm chứng kết quả</h3>
+      <ul>
+        <li>Đối chiếu kết quả với câu hỏi nghiên cứu ban đầu.</li>
+        <li>Kiểm tra công thức tính, bộ lọc và điều kiện phân tích.</li>
+        <li>So sánh kết quả giữa các nhóm hoặc giai đoạn.</li>
+        <li>Kiểm tra ảnh hưởng của ngoại lệ và kích thước mẫu.</li>
+        <li>Xác định phát hiện quan trọng, mức độ ảnh hưởng và độ tin cậy.</li>
+        <li>Phân biệt kết quả quan sát với giả thuyết giải thích kết quả.</li>
+        <li>Lưu bảng kết quả, mã phân tích và ghi chú diễn giải.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="task">
+    <summary><span class="number">5</span><span class="task-name">Diễn giải kết quả phân tích</span><span class="arrow">⌄</span></summary>
+    <div class="content">
+      <h3>Xác định thông điệp cần truyền tải</h3>
+      <ul>
+        <li>Xác định phát hiện chính từ kết quả phân tích.</li>
+        <li>Xác định đối tượng đọc kết quả.</li>
+        <li>Làm rõ người đọc cần biết gì và cần đưa ra quyết định nào.</li>
+        <li>Lựa chọn biểu đồ phù hợp với dữ liệu và thông điệp.</li>
+      </ul>
+      <h3>Các hình thức trình bày cần cân nhắc</h3>
+      <ul>
+        <li>Simple text — văn bản/chỉ số nổi bật.</li>
+        <li>Scatter plot — biểu đồ phân tán.</li>
+        <li>Table — bảng dữ liệu.</li>
+        <li>Line — biểu đồ đường.</li>
+        <li>Heatmap — bản đồ nhiệt.</li>
+        <li>Slopegraph — biểu đồ độ dốc.</li>
+        <li>Vertical bar — biểu đồ cột đứng.</li>
+        <li>Horizontal bar — biểu đồ thanh ngang.</li>
+        <li>Stacked vertical bar — biểu đồ cột chồng đứng.</li>
+        <li>Stacked horizontal bar — biểu đồ thanh ngang chồng.</li>
+        <li>Waterfall — biểu đồ thác nước.</li>
+        <li>Square area — biểu đồ diện tích hình vuông.</li>
+      </ul>
+      <h3>Lựa chọn phương án tốt nhất</h3>
+      <ul>
+        <li>Chọn hình thức dựa trên kết quả phân tích, mục đích và đối tượng sử dụng.</li>
+        <li>Kiểm tra biểu đồ có thể hiện đúng dữ liệu, đơn vị và sự khác biệt hay không.</li>
+        <li>Tránh kết luận nhân quả chỉ từ tương quan.</li>
+        <li>Đưa ra kết luận và đề xuất hành động dựa trên bằng chứng.</li>
+      </ul>
+    </div>
+  </details>
+
+  <details class="task">
+    <summary><span class="number">6</span><span class="task-name">Thiết kế và xây dựng sản phẩm trực quan hóa</span><span class="arrow">⌄</span></summary>
+    <div class="content">
+      <h3>Quy tắc màu sắc</h3>
+      <ul>
+        <li>Xanh biển: màu chủ đạo cho dữ liệu và thông tin thông thường.</li>
+        <li>Vàng: cảnh báo hoặc điểm cần chú ý.</li>
+        <li>Đỏ: mức nguy hiểm hoặc vấn đề nghiêm trọng.</li>
+        <li>Dùng màu nhất quán, có độ tương phản đủ tốt và không chỉ dựa vào màu để truyền đạt ý nghĩa.</li>
+      </ul>
+      <h3>Xác định yêu cầu</h3>
+      <ul>
+        <li>Xác định đối tượng sử dụng sản phẩm.</li>
+        <li>Xác định nhiệm vụ người xem cần thực hiện.</li>
+        <li>Chuyển câu hỏi nghiên cứu thành yêu cầu hiển thị.</li>
+        <li>Lập danh sách biểu đồ cần có và mục đích của từng biểu đồ.</li>
+        <li>Phác thảo bố cục dashboard.</li>
+      </ul>
+      <h3>Thiết kế biểu đồ</h3>
+      <ul>
+        <li>Chọn loại biểu đồ theo nhiệm vụ phân tích.</li>
+        <li>Xác định biến trên trục X, Y, kích thước và chú giải.</li>
+        <li>Viết tiêu đề thể hiện thông điệp chính.</li>
+        <li>Loại bỏ yếu tố gây nhiễu để làm nổi bật thông tin và giúp người đọc dễ quan sát.</li>
+      </ul>
+      <h3>Chọn công cụ</h3>
+      <ul>
+        <li>Chọn công cụ xây dựng dashboard có tương tác phù hợp, ví dụ Power BI, Tableau hoặc Python Plotly/Streamlit.</li>
+        <li>Kết nối dữ liệu sạch và xây dựng các biểu đồ theo thiết kế.</li>
+        <li>Thêm bộ lọc hoặc tương tác khi cần thiết.</li>
+        <li>Kiểm tra số liệu, bộ lọc, bố cục và khả năng đọc trước khi bàn giao.</li>
+      </ul>
+      <h3>Tiêu chí dashboard cần thể hiện</h3>
+      <ul>
+        <li><b>Hidden fact:</b> phát hiện thông tin ẩn hoặc điểm bất thường.</li>
+        <li><b>Trends:</b> thể hiện xu hướng theo thời gian.</li>
+        <li><b>Correlation:</b> thể hiện mối liên hệ giữa các biến.</li>
+        <li><b>Composition:</b> thể hiện thành phần và tỷ trọng.</li>
+        <li><b>Distribution:</b> thể hiện phân phối và độ phân tán.</li>
+      </ul>
+    </div>
+  </details>
+
+  <p class="note">Gợi ý: Mở từng mục để xem chi tiết. Dùng “Mở tất cả nhiệm vụ” nếu cần in hoặc lưu toàn bộ nội dung thành PDF.</p>
+</main>
+<script>
+  const tasks = [...document.querySelectorAll('details.task')];
+  document.getElementById('expandAll').addEventListener('click', () => tasks.forEach(t => t.open = true));
+  document.getElementById('collapseAll').addEventListener('click', () => tasks.forEach(t => t.open = false));
+</script>
+</body>
+</html>
