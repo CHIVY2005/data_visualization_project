@@ -13,6 +13,7 @@ import json
 import logging
 import os
 import random
+import sys
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Sequence
@@ -22,19 +23,14 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-ROOT = Path(__file__).resolve().parents[1]
-SEED = 2026
-SCHEMA_VERSION = "2.0"
-WARNING_TEMP_THRESHOLD = 85.0
-CRITICAL_TEMP_THRESHOLD = 95.0
-CADENCE_MINUTES = {"ETTh1": 60, "ETTh2": 60, "ETTm1": 15}
-MEASUREMENTS = ("OT", "HUFL", "HULL", "MUFL", "MULL", "LUFL", "LULL")
-TOTAL_COLUMNS = ("total_useful_load", "total_unuseful_load")
-FLOAT_COLUMNS = (*MEASUREMENTS, *TOTAL_COLUMNS, "reactive_ratio")
-CLEAN_COLUMNS = (
-    "dataset", "timestamp", *MEASUREMENTS, *TOTAL_COLUMNS,
-    "reactive_ratio", "thermal_regime", "is_imputed",
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from src.data.constants import (
+    CADENCE_MINUTES, CLEAN_COLUMNS,
+    CRITICAL_TEMP_THRESHOLD, FLOAT_COLUMNS, MEASUREMENTS, ROOT, SCHEMA_VERSION,
+    SEED, TOTAL_COLUMNS, WARNING_TEMP_THRESHOLD,
 )
+from src.data.feature_builder import classify_thermal_regime
 CLEAN_SCHEMA = pa.schema([
     pa.field("dataset", pa.string(), nullable=False),
     pa.field("timestamp", pa.timestamp("ns"), nullable=False),
@@ -71,13 +67,7 @@ def validate_output_path(out: Path, raw_dir: Path) -> Path:
 
 def thermal_regimes(ot: pd.Series) -> pd.Series:
     """Assign project regimes; missing temperature is never Normal."""
-    result = pd.Series("Unknown", index=ot.index, dtype="string")
-    result.loc[ot < WARNING_TEMP_THRESHOLD] = "Normal"
-    result.loc[
-        (ot >= WARNING_TEMP_THRESHOLD) & (ot < CRITICAL_TEMP_THRESHOLD)
-    ] = "Warning"
-    result.loc[ot >= CRITICAL_TEMP_THRESHOLD] = "Critical"
-    return result
+    return classify_thermal_regime(ot)
 
 
 def derive_measurements(frame: pd.DataFrame) -> pd.DataFrame:
