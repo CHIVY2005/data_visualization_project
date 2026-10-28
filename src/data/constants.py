@@ -1,27 +1,29 @@
-"""Shared T0102 artifact and sliding-window configuration."""
+"""Shared physical-data contracts; seasons are project month bins, not climate."""
 
-from typing import Final, Tuple
+from pathlib import Path
 
-SEED: Final[int] = 2026
-DEFAULT_DATA_PATH: Final[str] = "data/processed/clean_ett.parquet"
-DEFAULT_SIZE: Final[Tuple[int, int, int]] = (96, 48, 24)
-DEFAULT_BATCH_SIZE: Final[int] = 32
-SPLITS: Final[Tuple[str, ...]] = ("train", "val", "test")
-NUMERICAL_FEATURES: Final[Tuple[str, ...]] = (
-    "HUFL", "HULL", "MUFL", "MULL", "LUFL", "LULL", "OT",
+ROOT = Path(__file__).resolve().parents[2]
+SEED = 2026
+SCHEMA_VERSION = "2.0"
+WARNING_TEMP_THRESHOLD = 85.0
+CRITICAL_TEMP_THRESHOLD = 95.0
+CADENCE_MINUTES = {"ETTh1": 60, "ETTh2": 60, "ETTm1": 15}
+MEASUREMENTS = ("OT", "HUFL", "HULL", "MUFL", "MULL", "LUFL", "LULL")
+USEFUL_LOADS = ("HUFL", "MUFL", "LUFL")
+UNUSEFUL_LOADS = ("HULL", "MULL", "LULL")
+TOTAL_COLUMNS = ("total_useful_load", "total_unuseful_load")
+FLOAT_COLUMNS = (*MEASUREMENTS, *TOTAL_COLUMNS, "reactive_ratio")
+CLEAN_COLUMNS = (
+    "dataset", "timestamp", *MEASUREMENTS, *TOTAL_COLUMNS,
+    "reactive_ratio", "thermal_regime", "is_imputed",
 )
-TIME_FEATURES: Final[Tuple[str, ...]] = (
-    "hour", "day_of_week", "day", "month",
+TEMPORAL_COLUMNS = (
+    "hour", "day_of_week", "day_name", "is_weekend", "month", "season",
 )
-TIME_MARK_COLUMNS: Final[Tuple[str, ...]] = tuple(
-    f"{column}_norm" for column in TIME_FEATURES
-)
-ARTIFACT_COLUMNS: Final[Tuple[str, ...]] = (
-    "date", *NUMERICAL_FEATURES, *TIME_FEATURES, *TIME_MARK_COLUMNS,
-    "split", *(f"{column}_scaled" for column in NUMERICAL_FEATURES),
-)
-TIME_MARK_MIN: Final[float] = -0.5
-TIME_MARK_MAX: Final[float] = 0.5
-HOURLY_FREQUENCY: Final[str] = "1h"
-SMOKE_HORIZONS: Final[Tuple[int, ...]] = (24, 168)
-WORKER_SEED_MODULUS: Final[int] = 2**32
+SHARE_COLUMNS = ("HUFL_ratio", "MUFL_ratio", "LUFL_ratio")
+FEATURE_COLUMNS = (*CLEAN_COLUMNS, *TEMPORAL_COLUMNS, *SHARE_COLUMNS)
+DRY_MONTHS = (11, 12, 1, 2, 3, 4)
+DAY_NAMES = ("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+SEASON_CONVENTION = "project_month_bins_Dry_Nov_Apr_Wet_May_Oct_not_verified_climate"
+DEFAULT_CLEAN_PATH = ROOT / "data" / "processed" / "clean_ett.parquet"
+DEFAULT_FEATURE_PATH = ROOT / "data" / "processed" / "grid_features.parquet"
