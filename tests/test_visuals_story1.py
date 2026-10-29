@@ -345,6 +345,7 @@ class TestT0303StackedBar:
 
     def test_title_contains_season(self) -> None:
         frame = _feature_frame(rows=480)
+        frame["season"] = "Wet"  # Explicitly provide rows in the tested scope.
         fig = self.sb.build_stacked_bar(frame, season="Wet", dataset_label="ETTh1")
         title = fig.layout.title.text
         assert "Wet" in title

@@ -43,8 +43,6 @@ THERMAL_BREACH_SCHEMA = pa.schema([
     pa.field("degree_hours", pa.float32(), nullable=False),
     pa.field("sample_count", pa.int32(), nullable=False),
     pa.field("is_right_censored", pa.bool_(), nullable=False),
-    pa.field("event_center_timestamp", pa.timestamp("ns"), nullable=False),
-    *(pa.field(column, pa.float32()) for column in ZSCORE_COLUMNS),
 ])
 
 
@@ -137,15 +135,24 @@ def build_thermal_breach_events(
             regime = _threshold_regime(float(threshold))
             for number, event in enumerate(_iter_breach_events(ordered, threshold), 1):
                 event_frame = ordered.loc[list(event.rows)]
-                center = _center_timestamp(event_frame)
-                center_scores = zscores.loc[
-                    zscores["timestamp"].eq(center), list(ZSCORE_COLUMNS)
-                ].iloc[0]
-                end_timestamp = event_frame["timestamp"].iloc[-1] + pd.Timedelta(
-                    hours=cadence_hours
-                )
+                # A left-held sample has support only if the next finite OT
+                # observation is exactly one cadence away. Never extrapolate.
+                supported = []
+                for index in event.rows:
+                    if index + 1 >= len(ordered):
+                        continue
+                    nxt = ordered.iloc[index + 1]
+                    if (nxt.timestamp - ordered.iloc[index].timestamp ==
+                            pd.Timedelta(hours=cadence_hours)
+                            and pd.notna(nxt.OT) and np.isfinite(nxt.OT)):
+                        supported.append(index)
+                if not supported:
+                    continue
+                support_frame = ordered.loc[supported]
+                end_timestamp = support_frame.timestamp.iloc[-1] + pd.Timedelta(
+                    hours=cadence_hours)
                 degree_hours = (
-                    pd.to_numeric(event_frame["OT"], errors="coerce") - threshold
+                    pd.to_numeric(support_frame["OT"], errors="coerce") - threshold
                 ).clip(lower=0).sum() * cadence_hours
                 item: dict[str, object] = {
                     "dataset": str(dataset),
@@ -154,15 +161,12 @@ def build_thermal_breach_events(
                     "thermal_regime": regime,
                     "start_timestamp": event_frame["timestamp"].iloc[0],
                     "end_timestamp": end_timestamp,
-                    "duration_hours": np.float32(len(event_frame) * cadence_hours),
+                    "duration_hours": np.float32(len(support_frame) * cadence_hours),
                     "peak_ot": np.float32(event_frame["OT"].max()),
                     "degree_hours": np.float32(degree_hours),
-                    "sample_count": int(len(event_frame)),
+                    "sample_count": int(len(support_frame)),
                     "is_right_censored": bool(event.censored),
-                    "event_center_timestamp": center,
                 }
-                for column in ZSCORE_COLUMNS:
-                    item[column] = np.float32(center_scores[column])
                 rows.append(item)
     return _coerce_events(pd.DataFrame(rows, columns=THERMAL_BREACH_SCHEMA.names))
 
@@ -172,10 +176,10 @@ def _coerce_events(frame: pd.DataFrame) -> pd.DataFrame:
     result = frame.copy()
     for column in ("dataset", "event_id", "thermal_regime"):
         result[column] = result[column].astype("string")
-    for column in ("start_timestamp", "end_timestamp", "event_center_timestamp"):
+    for column in ("start_timestamp", "end_timestamp"):
         result[column] = pd.to_datetime(result[column]).astype("datetime64[ns]")
     for column in (
-        "threshold_c", "duration_hours", "peak_ot", "degree_hours", *ZSCORE_COLUMNS,
+        "threshold_c", "duration_hours", "peak_ot", "degree_hours",
     ):
         result[column] = pd.to_numeric(result[column], errors="coerce").astype(
             "float32"
@@ -202,13 +206,13 @@ def save_thermal_breach_events(
     """Build and save the T0203 breach_events.parquet artifact."""
     events = build_thermal_breach_events(frame)
     metadata = metadata_bytes(
-        "breach_events",
+        "thermal_breach_events",
         dataset_names(events) if not events.empty else dataset_names(build_grid_features(frame)),
         source_hash,
         {
             "thresholds_c": [WARNING_TEMP_THRESHOLD, CRITICAL_TEMP_THRESHOLD],
             "degree_hours": "sum(max(OT-threshold,0) * cadence_hours)",
-            "z_score_policy": "dataset_level_load_zscore_at_event_center_timestamp",
+            "support_policy": "next_finite_observation_exact_cadence_no_extrapolation",
         },
         {
             "rows": len(events),

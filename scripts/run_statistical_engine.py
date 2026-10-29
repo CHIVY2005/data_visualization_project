@@ -10,10 +10,11 @@ from typing import Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.analysis.lag_correlation import save_lag_matrix
-from src.analysis.load_profiling import save_hourly_quantiles
+from src.analysis.lag_correlation import save_lag_matrix, save_lag_envelope
+from src.analysis.load_profiling import save_hourly_quantiles, save_load_profiles_stl
+from src.analysis.diagnostics import save_diagnostics
 from src.analysis.common import file_sha256, load_feature_input, set_seed
-from src.analysis.thermal_risk import save_thermal_breach_events
+from src.analysis.thermal_risk import save_thermal_breach_events, build_thermal_breach_events
 from src.data.constants import (
     DEFAULT_FEATURE_PATH,
     DEFAULT_BREACH_EVENTS_PATH,
@@ -34,7 +35,11 @@ def run_engine(
     digest = file_sha256(source)
     directory = Path(out_dir)
     outputs = {
-        "hourly_quantiles": save_hourly_quantiles(
+        "load_profiles_stl": save_load_profiles_stl(
+            frame, directory / "load_profiles_stl.parquet",
+            source_hash=digest, source_path=source,
+        ),
+        "quantile_bands": save_hourly_quantiles(
             frame,
             directory / DEFAULT_HOURLY_QUANTILES_PATH.name,
             source_hash=digest,
@@ -46,13 +51,21 @@ def run_engine(
             source_hash=digest,
             source_path=source,
         ),
-        "breach_events": save_thermal_breach_events(
+        "lag_correlation_matrix": save_lag_envelope(
+            frame, directory / "lag_correlation_matrix.json",
+            source_hash=digest, source_path=source,
+        ),
+        "thermal_breach_events": save_thermal_breach_events(
             frame,
             directory / DEFAULT_BREACH_EVENTS_PATH.name,
             source_hash=digest,
             source_path=source,
         ),
     }
+    outputs.update(save_diagnostics(
+        frame, build_thermal_breach_events(frame), directory,
+        source_hash=digest, source_path=source,
+    ))
     return {key: str(value) for key, value in outputs.items()}
 
 

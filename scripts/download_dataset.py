@@ -2,7 +2,7 @@
 """
 download_dataset.py
 -------------------
-Downloader script for Informer (AAAI-21) benchmark ETT datasets:
+Downloader script for official historical ETT datasets:
 - ETTh1.csv, ETTh2.csv (1-hour granularity, ~17,420 records)
 - ETTm1.csv, ETTm2.csv (15-minute granularity, ~69,680 records)
 
@@ -164,7 +164,7 @@ def verify_dataset_integrity(
     """
     Perform a comprehensive integrity smoke check on a downloaded CSV file:
     1. File existence and non-zero size.
-    2. Header inspection: Must contain all 8 canonical Informer columns.
+    2. Header inspection: Must contain all 8 canonical ETT columns.
     3. Row count check: Total data records count compared against benchmark ground truth.
 
     Parameters
@@ -283,7 +283,7 @@ def stream_download(
     """
     request = urllib.request.Request(
         url,
-        headers={"User-Agent": "LSTF-Informer-Downloader/1.0 (Mozilla/5.0; DefensiveEngineering)"},
+        headers={"User-Agent": "ETT-Grid-Downloader/2.0 (Mozilla/5.0; DefensiveEngineering)"},
     )
 
     with urllib.request.urlopen(request, timeout=timeout) as response:
@@ -473,7 +473,7 @@ def download_dataset_with_retry(
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments."""
     parser = argparse.ArgumentParser(
-        description="Download and verify official Informer benchmark ETT datasets (AAAI-21).",
+        description="Download and verify official historical ETT datasets.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -520,7 +520,7 @@ def main() -> int:
     logger = configure_logger(verbose=args.verbose)
 
     logger.info("=" * 72)
-    logger.info("INFORMER BENCHMARK DATASET DOWNLOAD PIPELINE (AAAI-21)")
+    logger.info("ETT HISTORICAL DATASET DOWNLOAD PIPELINE")
     logger.info("Repository Standard Seed: %d | Guardrail: data/raw/ (RED ZONE)", PROJECT_SEED)
     logger.info("=" * 72)
 
@@ -609,7 +609,7 @@ def main() -> int:
         logger.error("Download process finished with one or more errors.")
         return 1
 
-    logger.info("All Informer benchmark datasets verified successfully in %s", output_dir)
+    logger.info("All ETT datasets verified successfully in %s", output_dir)
     return 0
 
 

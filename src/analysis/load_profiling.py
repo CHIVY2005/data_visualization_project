@@ -77,7 +77,8 @@ def _fit_stl_segment(values: pd.Series, period: int) -> tuple[pd.Series, ...]:
         from statsmodels.tsa.seasonal import STL
     except ImportError as exc:
         raise RuntimeError("statsmodels is required for STL decomposition") from exc
-    fit = STL(values.astype("float64"), period=period, robust=True).fit()
+    fit = STL(values.astype("float64"), period=period, robust=True,
+              seasonal_jump=3, trend_jump=3, low_pass_jump=3).fit()
     return (
         pd.Series(fit.trend, index=values.index),
         pd.Series(fit.seasonal, index=values.index),
@@ -277,7 +278,7 @@ def save_hourly_quantiles(
     """Build and save the T0201 empirical hourly quantile artifact."""
     bands = build_quantile_bands(frame)
     metadata = metadata_bytes(
-        "hourly_quantiles",
+        "quantile_bands",
         dataset_names(bands),
         source_hash,
         {
@@ -290,6 +291,26 @@ def save_hourly_quantiles(
     )
     table = pa.Table.from_pandas(
         bands, schema=QUANTILE_SCHEMA, preserve_index=False, safe=True,
+    ).replace_schema_metadata(metadata)
+    return atomic_write_parquet(table, out, source_path)
+
+
+def save_load_profiles_stl(
+    frame: pd.DataFrame, out: Path | str, *, source_hash: str,
+    source_path: Path | str | None = None,
+) -> Path:
+    """Export both canonical record types, not just hourly quantiles."""
+    records = build_load_profiles_stl(frame)
+    metadata = metadata_bytes(
+        "load_profiles_stl", dataset_names(frame), source_hash,
+        {"daily_period": {d: _stl_period(d) for d in dataset_names(frame)},
+         "robust": True, "seasonal_jump": 3, "trend_jump": 3,
+         "low_pass_jump": 3, "season_convention": SEASON_CONVENTION},
+        {"rows": len(records), "unfitted_stl_rows": int(
+            (records.record_type.eq("stl") & records.trend.isna()).sum())},
+    )
+    table = pa.Table.from_pandas(
+        records, schema=LOAD_PROFILE_SCHEMA, preserve_index=False,
     ).replace_schema_metadata(metadata)
     return atomic_write_parquet(table, out, source_path)
 
@@ -310,6 +331,10 @@ def export_load_profiling_artifacts(
     )
     return {
         "hourly_quantiles": str(quantile_path),
+        "load_profiles_stl": str(save_load_profiles_stl(
+            frame, directory / "load_profiles_stl.parquet",
+            source_hash=digest, source_path=source,
+        )),
     }
 
 

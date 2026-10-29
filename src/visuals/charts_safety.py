@@ -23,6 +23,7 @@ from src.data.constants import (
     CRITICAL_TEMP_THRESHOLD,
     WARNING_TEMP_THRESHOLD,
 )
+from src.visuals.time_series import gap_preserving_frame
 
 # Project colour palette (AGENTS §CODE & VISUALIZATION STANDARDS)
 _COLOUR_OT = "#1E3A8A"        # Navy — OT line
@@ -62,7 +63,7 @@ def build_ot_threshold_chart(
         fig.update_layout(height=height, width=width)
         return fig
 
-    df = frame.dropna(subset=["timestamp", "OT"]).sort_values("timestamp").copy()
+    df = frame.dropna(subset=["timestamp"]).sort_values("timestamp").copy()
     if df.empty:
         fig.add_annotation(
             text="Không có dữ liệu hợp lệ sau khi lọc.",
@@ -87,12 +88,7 @@ def build_ot_threshold_chart(
         choices = ["Critical", "Warning"]
         df["thermal_regime"] = np.select(conditions, choices, default="Normal")
 
-    n_points = len(df)
-    if n_points > max_points:
-        step = int(np.ceil(n_points / max_points))
-        line_df = df.iloc[::step]
-    else:
-        line_df = df
+    line_df = gap_preserving_frame(df, max_points)
 
     fig.add_trace(
         go.Scatter(

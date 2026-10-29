@@ -12,6 +12,8 @@ import pandas as pd
 import pyarrow as pa
 
 from src.analysis.common import (
+    atomic_write_json,
+    utc_now_iso,
     atomic_write_parquet,
     dataset_names,
     file_sha256,
@@ -217,6 +219,19 @@ def save_lag_matrix(
         matrix, schema=LAG_MATRIX_SCHEMA, preserve_index=False, safe=True,
     ).replace_schema_metadata(metadata)
     return atomic_write_parquet(table, out, source_path)
+
+
+def save_lag_envelope(
+    frame: pd.DataFrame, out: Path | str, *, source_hash: str,
+    source_path: Path | str | None = None,
+) -> Path:
+    """Canonical 6x13 envelope; the optional Parquet view is derived separately."""
+    return atomic_write_json({
+        "schema_version": "2.0", "timezone": "unknown",
+        "generated_at": utc_now_iso(), "seed": SEED,
+        "source_hash": source_hash,
+        "records": build_lag_correlation_records(frame),
+    }, out, source_path)
 
 
 def export_lag_correlation_artifact(

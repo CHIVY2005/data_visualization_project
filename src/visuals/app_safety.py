@@ -20,6 +20,7 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+from src.visuals.time_series import gap_preserving_frame
 
 from src.data.constants import (
     CRITICAL_TEMP_THRESHOLD,
@@ -85,7 +86,7 @@ def build_small_multiples(
         fig.update_layout(height=height, width=width)
         return fig
 
-    df = frame.dropna(subset=["timestamp", *LOAD_BRANCHES]).sort_values("timestamp").copy()
+    df = frame.dropna(subset=["timestamp"]).sort_values("timestamp").copy()
     if df.empty:
         fig = go.Figure()
         fig.add_annotation(
@@ -103,10 +104,7 @@ def build_small_multiples(
     if not pd.api.types.is_datetime64_any_dtype(df["timestamp"]):
         df["timestamp"] = pd.to_datetime(df["timestamp"])
 
-    n_points = len(df)
-    if n_points > max_points:
-        step = int(np.ceil(n_points / max_points))
-        df = df.iloc[::step]
+    df = gap_preserving_frame(df, max_points)
 
     subplot_titles = [_BRANCH_DESCRIPTIONS.get(b, b) for b in LOAD_BRANCHES]
 
@@ -203,35 +201,6 @@ def build_small_multiples(
 # ---------------------------------------------------------------------------
 # T0402b: Joint Scatter + LOESS Smoothing
 # ---------------------------------------------------------------------------
-
-def _compute_local_smooth(
-    x_vals: np.ndarray, y_vals: np.ndarray, n_bins: int = 50
-) -> tuple[np.ndarray, np.ndarray]:
-    """Compute lightweight binned local regression fallback when statsmodels absent."""
-    if len(x_vals) == 0:
-        return np.array([]), np.array([])
-    try:
-        from statsmodels.nonparametric.smoothers_lowess import lowess
-
-        if len(x_vals) > 500:
-            idx = np.linspace(0, len(x_vals) - 1, 500, dtype=int)
-            x_s, y_s = x_vals[idx], y_vals[idx]
-        else:
-            x_s, y_s = x_vals, y_vals
-        res = lowess(y_s, x_s, frac=0.3, return_sorted=True)
-        return res[:, 0], res[:, 1]
-    except ImportError:
-        pass
-
-    sort_idx = np.argsort(x_vals)
-    xs = x_vals[sort_idx]
-    ys = y_vals[sort_idx]
-
-    bins = np.array_split(np.arange(len(xs)), min(n_bins, len(xs)))
-    b_x = np.array([xs[b].mean() for b in bins if len(b) > 0])
-    b_y = np.array([ys[b].mean() for b in bins if len(b) > 0])
-    return b_x, b_y
-
 
 def build_scatter_loess(
     frame: pd.DataFrame,
@@ -349,12 +318,15 @@ def build_scatter_loess(
         )
 
     if loess_df is not None and not loess_df.empty and "loess_ot" in loess_df.columns:
-        smooth_x = loess_df[load_variable].values
+        smooth_x = loess_df[
+            "load_value" if "load_value" in loess_df else load_variable
+        ].values
         smooth_y = loess_df["loess_ot"].values
     else:
-        x_all = df[load_variable].to_numpy(dtype=float)
-        y_all = df["OT"].to_numpy(dtype=float)
-        smooth_x, smooth_y = _compute_local_smooth(x_all, y_all)
+        smooth_x, smooth_y = np.array([]), np.array([])
+        fig.add_annotation(text="LOESS reference unavailable — run offline engine",
+                           xref="paper", yref="paper", x=0, y=1.1,
+                           showarrow=False)
 
     if len(smooth_x) > 0:
         fig.add_trace(
@@ -585,14 +557,14 @@ def compute_safety_kpis(
         if (feat_ds is not None and "OT" in feat_ds.columns and len(feat_ds) > 0)
         else float("nan")
     )
-    tot_degree_hours = (
-        float(ev_ds["degree_hours"].sum())
-        if (ev_ds is not None and "degree_hours" in ev_ds.columns and len(ev_ds) > 0)
-        else 0.0
-    )
-    return {
+    metrics = {
         "total_events": total_events,
         "crit_events": crit_events,
         "max_ot": max_ot,
-        "tot_degree_hours": tot_degree_hours,
     }
+    for threshold, prefix in ((85.0, "warning"), (95.0, "critical")):
+        sub = ev_ds.loc[ev_ds.threshold_c.eq(threshold)] if ev_ds is not None else None
+        for column in ("degree_hours", "duration_hours"):
+            metrics[f"{prefix}_{column}"] = (
+                float(sub[column].sum()) if sub is not None else float("nan"))
+    return metrics

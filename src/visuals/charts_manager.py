@@ -103,10 +103,19 @@ def build_calendar_heatmap(
     colorscale = _COLORSCALE_OT if is_ot else _COLORSCALE_LOAD
 
     finite = daily["value"].replace([np.inf, -np.inf], np.nan).dropna()
-    zmin = float(finite.quantile(0.01)) if len(finite) else 0.0
-    zmax = float(finite.quantile(0.99)) if len(finite) else 1.0
+    zmin = min(0.0, float(finite.min())) if len(finite) else 0.0
+    zmax = max(100.0, float(finite.max())) if is_ot and len(finite) else (
+        float(finite.max()) if len(finite) else 1.0)
     if zmin >= zmax:
         zmax = zmin + 1.0
+    if is_ot:
+        w = (WARNING_TEMP_THRESHOLD - zmin) / (zmax - zmin)
+        c = (CRITICAL_TEMP_THRESHOLD - zmin) / (zmax - zmin)
+        colorscale = [
+            [0, "#DBEAFE"], [max(0, w - 1e-7), _COLOUR_OT],
+            [w, _COLOUR_WARN], [max(w, c - 1e-7), _COLOUR_WARN],
+            [c, _COLOUR_CRIT], [1, _COLOUR_CRIT],
+        ]
 
     month_labels = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun",

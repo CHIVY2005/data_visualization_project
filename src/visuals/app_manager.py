@@ -39,7 +39,7 @@ _TIER_USEFUL_COLOURS = ["#0D9488", "#0F766E", "#14B8A6"]
 _TIER_UNUSEFUL_COLOURS = ["#64748B", "#475569", "#94A3B8"]
 
 _COLORSCALE_DIV = [
-    [0.0, "#DC2626"],    # Crimson — strong negative
+    [0.0, "#B45309"],    # Brown/orange — negative association, not thermal alert
     [0.5, "#F8FAFC"],    # near-white — zero
     [1.0, "#1E3A8A"],    # Navy — strong positive
 ]
@@ -66,12 +66,13 @@ def _hourly_mean_fraction(
             hour_data = df[df["hour"] == hour]
             useful_vals = pd.to_numeric(
                 hour_data[useful_col], errors="coerce"
-            ).clip(lower=0)
+            )
             unuseful_vals = pd.to_numeric(
                 hour_data[unuseful_col], errors="coerce"
-            ).clip(lower=0)
+            )
             total = useful_vals + unuseful_vals
-            valid = (total > 0) & useful_vals.notna() & unuseful_vals.notna()
+            valid = ((total > 0) & useful_vals.ge(0) & unuseful_vals.ge(0)
+                     & np.isfinite(useful_vals) & np.isfinite(unuseful_vals))
             if valid.any():
                 useful_frac = (useful_vals[valid] / total[valid]).mean()
                 unuseful_frac = 1.0 - float(useful_frac)
@@ -103,6 +104,8 @@ def build_stacked_bar(
         raise ValueError(f"Missing load columns for stacked bar: {sorted(missing)}")
     if frame.empty:
         raise ValueError("Frame must contain at least one sample")
+    if season is not None and not frame["season"].eq(season).any():
+        raise ValueError("No data after filtering — check season")
 
     frac_df = _hourly_mean_fraction(frame, season)
     if frac_df.empty:
@@ -118,6 +121,15 @@ def build_stacked_bar(
         subplot_titles=[f"{t} Voltage Tier" for t in tiers_to_plot],
         horizontal_spacing=0.06,
     )
+    selected = frame if season is None else frame.loc[frame.season.eq(season)]
+    invalid = sum(int(((selected[u] < 0) | (selected[v] < 0) |
+                       (selected[u] + selected[v] <= 0) |
+                       selected[u].isna() | selected[v].isna()).sum())
+                  for _, u, v in _TIERS)
+    if invalid:
+        fig.add_annotation(text=f"Quality: {invalid:,} invalid tier-samples excluded; no clipping",
+                           xref="paper", yref="paper", x=0, y=-0.25,
+                           showarrow=False)
 
     hours = list(range(24))
 
@@ -281,6 +293,7 @@ def build_lag_heatmap(
         y=y_labels,
         zmin=-1.0,
         zmax=1.0,
+        zmid=0.0,
         colorscale=_COLORSCALE_DIV,
         colorbar={
             "title": {"text": "r", "side": "right"},
@@ -356,10 +369,11 @@ def compute_manager_kpis(
         df = df[df["season"] == season]
 
     total_samples = len(df)
-    ot_mean = float(df["OT"].mean()) if (total_samples > 0 and "OT" in df.columns) else 0.0
-    ot_max = float(df["OT"].max()) if (total_samples > 0 and "OT" in df.columns) else 0.0
+    ot_mean = float(df["OT"].mean()) if (total_samples > 0 and "OT" in df.columns) else float("nan")
+    ot_max = float(df["OT"].max()) if (total_samples > 0 and "OT" in df.columns) else float("nan")
     warn_count = int(df["OT"].ge(85).sum()) if (total_samples > 0 and "OT" in df.columns) else 0
-    warn_pct = (warn_count / max(total_samples, 1)) * 100.0
+    valid_ot = df["OT"].notna().sum() if "OT" in df else 0
+    warn_pct = warn_count / valid_ot * 100 if valid_ot else float("nan")
 
     return {
         "sample_count": total_samples,

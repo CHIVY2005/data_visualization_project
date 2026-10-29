@@ -169,7 +169,10 @@ def test_compatibility_with_clean_ett_parquet() -> None:
     before = hashlib.sha256(source.read_bytes()).hexdigest()
     frame = pd.read_parquet(source)
     enriched = fb.build_grid_features(frame)
-    assert len(enriched) == len(frame) == 17420
+    assert len(enriched) == len(frame) == 104520
+    assert enriched.groupby("dataset").size().to_dict() == {
+        "ETTh1": 17420, "ETTh2": 17420, "ETTm1": 69680,
+    }
     assert tuple(enriched.columns) == FEATURE_COLUMNS
     assert len(enriched.columns) == 23
     pd.testing.assert_frame_equal(
@@ -373,4 +376,4 @@ def test_cpu_only_import_and_cli(tmp_path: Path) -> None:
         sys.executable, "-m", "src.data.feature_builder", "--out", str(out),
     ], cwd=ROOT, capture_output=True, text=True, check=False)
     assert result.returncode == 0, result.stderr
-    assert len(fb.load_grid_features(out)) == 17420
+    assert len(fb.load_grid_features(out)) == 104520

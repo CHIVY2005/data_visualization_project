@@ -140,6 +140,8 @@ class TestT0401OTThresholdChart:
         # 10,000 rows
         large_df = _feature_frame(240)
         large_df = pd.concat([large_df] * 50, ignore_index=True)
+        large_df["timestamp"] = pd.date_range(
+            "2026-01-01", periods=len(large_df), freq="h")
         fig = build_ot_threshold_chart(large_df, max_points=1000)
         # Primary line has at most ~1000 points
         assert len(fig.data[0].x) <= 1200
@@ -229,10 +231,11 @@ class TestT0402ScatterLoess:
         fig = build_scatter_loess(df, load_variable="HUFL", dataset_label="ETTh1")
 
         assert isinstance(fig, go.Figure)
-        # At least scatter traces + LOESS trend trace
+        # Missing offline curve must not trigger computation during render.
         assert len(fig.data) >= 2
         trace_names = [t.name for t in fig.data]
-        assert any("LOESS" in name for name in trace_names)
+        assert not any("LOESS" in name for name in trace_names)
+        assert any("offline engine" in a.text for a in fig.layout.annotations)
 
     def test_precomputed_loess_df(self) -> None:
         pytest.importorskip("plotly")

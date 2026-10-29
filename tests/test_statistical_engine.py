@@ -86,7 +86,7 @@ def test_t0201_atomic_save_metadata(tmp_path: Path) -> None:
     )
     metadata = pq.read_schema(out).metadata
     assert metadata[b"schema_version"] == b"2.0"
-    assert metadata[b"artifact_type"] == b"hourly_quantiles"
+    assert metadata[b"artifact_type"] == b"quantile_bands"
     assert json.loads(metadata[b"parameters"])["bands"]["95"] == ["q025", "q975"]
     assert not out.with_name(out.name + ".tmp").exists()
 
@@ -148,7 +148,7 @@ def _risk_clean_frame() -> pd.DataFrame:
 def test_t0203_thermal_events_degree_hours_and_zscores() -> None:
     events = risk.build_thermal_breach_events(_risk_clean_frame())
     assert tuple(events.columns) == tuple(risk.THERMAL_BREACH_SCHEMA.names)
-    assert set(risk.ZSCORE_COLUMNS).issubset(events.columns)
+    assert len(events.columns) == 11
 
     critical = events.loc[
         events["thermal_regime"].eq("Critical")
@@ -159,8 +159,7 @@ def test_t0203_thermal_events_degree_hours_and_zscores() -> None:
     assert critical["degree_hours"] == pytest.approx(8)
     assert critical["sample_count"] == 3
     assert not bool(critical["is_right_censored"])
-    assert critical["event_center_timestamp"] == pd.Timestamp("2026-01-01 05:00:00")
-    assert np.isfinite(critical[list(risk.ZSCORE_COLUMNS)].astype("float32")).all()
+    assert critical["end_timestamp"] == pd.Timestamp("2026-01-01 07:00:00")
 
     tail = events.loc[
         events["thermal_regime"].eq("Critical")
@@ -179,7 +178,7 @@ def test_t0203_atomic_save_metadata(tmp_path: Path) -> None:
     out = tmp_path / "breach_events.parquet"
     risk.save_thermal_breach_events(_risk_clean_frame(), out, source_hash="c" * 64)
     metadata = pq.read_schema(out).metadata
-    assert metadata[b"artifact_type"] == b"breach_events"
+    assert metadata[b"artifact_type"] == b"thermal_breach_events"
     params = json.loads(metadata[b"parameters"])
-    assert params["z_score_policy"].startswith("dataset_level")
+    assert params["support_policy"].startswith("next_finite")
     assert not out.with_name(out.name + ".tmp").exists()

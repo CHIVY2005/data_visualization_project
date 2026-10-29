@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT))
 
 from scripts import preprocess_ett as etl
 
-PARQUET_PATH = ROOT / "data" / "processed" / "clean_ett.parquet"
+PARQUET_PATH = ROOT / "data/processed/datasets/ETTh1/clean_ett.parquet"
 EXPECTED_COLUMNS = (
     "dataset", "timestamp", "OT", "HUFL", "HULL", "MUFL", "MULL", "LUFL",
     "LULL", "total_useful_load", "total_unuseful_load", "reactive_ratio",
