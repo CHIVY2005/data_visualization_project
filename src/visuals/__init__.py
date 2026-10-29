@@ -5,8 +5,23 @@ Canonical Charter Modules:
   - app_manager:    T0303 100% Stacked Bar + Lag Cross-Correlation Heatmap & Manager KPIs
   - charts_safety:  T0401 OT Threshold Monitoring Chart + Barcode Rug Plot
   - app_safety:     T0402 Synchronized Small Multiples + Joint Scatter LOESS & Regime Boxplots
+  - action_titles:  T0502 Evidence-based dynamic Action Titles per FilterState
 """
 
+from src.visuals.action_titles import (
+    TitleContext,
+    build_context,
+    calendar_heatmap_title,
+    stl_title,
+    quantile_fan_title,
+    stacked_bar_title,
+    lag_heatmap_title,
+    ot_threshold_title,
+    barcode_rug_title,
+    small_multiples_title,
+    loess_scatter_title,
+    regime_boxplots_title,
+)
 from src.visuals.app_manager import (
     build_lag_heatmap,
     build_stacked_bar,
@@ -43,4 +58,17 @@ __all__ = [
     "build_scatter_loess",
     "build_regime_boxplots",
     "compute_safety_kpis",
+    # T0502 Action Titles
+    "TitleContext",
+    "build_context",
+    "calendar_heatmap_title",
+    "stl_title",
+    "quantile_fan_title",
+    "stacked_bar_title",
+    "lag_heatmap_title",
+    "ot_threshold_title",
+    "barcode_rug_title",
+    "small_multiples_title",
+    "loess_scatter_title",
+    "regime_boxplots_title",
 ]

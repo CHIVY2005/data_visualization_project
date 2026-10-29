@@ -59,6 +59,20 @@ from src.visuals import (
     compute_manager_kpis,
     compute_safety_kpis,
 )
+from src.visuals.action_titles import (
+    TitleContext,
+    build_context,
+    calendar_heatmap_title,
+    stl_title,
+    quantile_fan_title,
+    stacked_bar_title,
+    lag_heatmap_title,
+    ot_threshold_title,
+    barcode_rug_title,
+    small_multiples_title,
+    loess_scatter_title,
+    regime_boxplots_title,
+)
 from src.visuals.filters import (
     FilterState,
     filter_events,
@@ -184,6 +198,10 @@ _STORY1_VIEW_HINTS: dict[str, str] = {
 
 def _render_story1_kpis(features: pd.DataFrame) -> None:
     kpis = compute_manager_kpis(features)
+    _render_story1_kpis_from_dict(kpis)
+
+
+def _render_story1_kpis_from_dict(kpis: dict) -> None:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("🌡️ OT Mean", _fmt_float(kpis.get("ot_mean"), suffix=" °C"))
     c2.metric("🔥 OT Max", _fmt_float(kpis.get("ot_max"), suffix=" °C"))
@@ -199,7 +217,8 @@ def render_story1(
 ) -> None:
     """Render only the selected analytical view; no eager hidden-tab computation."""
     st.subheader("📈 Story 1 — Operational Manager")
-    _render_story1_kpis(features)
+    kpis = compute_manager_kpis(features)
+    _render_story1_kpis_from_dict(kpis)
 
     hint = _STORY1_VIEW_HINTS.get(view, "")
     if hint:
@@ -212,8 +231,17 @@ def render_story1(
         )
         return
 
+    # Build shared title context (no events for Story 1)
+    ctx = build_context(
+        state.dataset, state.season, state.start, state.end,
+        variable, len(features), manager_kpis=kpis,
+    )
+
     if view == "Calendar Heatmap":
-        fig = build_calendar_heatmap(features, variable=variable)
+        st.markdown(f"##### {calendar_heatmap_title(ctx)}")
+        fig = build_calendar_heatmap(
+            features, variable=variable, dataset_label=state.dataset
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     elif view == "STL Decomposition":
@@ -229,7 +257,10 @@ def render_story1(
                     f"variable **{variable}**. Try widening the Date Range."
                 )
             else:
-                fig = build_stl_panels(selected, variable=variable)
+                st.markdown(f"##### {stl_title(ctx)}")
+                fig = build_stl_panels(
+                    selected, variable=variable, dataset_label=state.dataset
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
     elif view == "Historical Quantile Fan":
@@ -240,13 +271,23 @@ def render_story1(
                 else sorted(bands.season.unique().tolist())
             )
             for season in seasons:
+                fan_ctx = TitleContext(
+                    dataset=state.dataset, season=season,
+                    start=state.start, end=state.end,
+                    variable=variable, n_samples=len(features),
+                )
+                st.markdown(f"##### {quantile_fan_title(fan_ctx)}")
                 fig = build_quantile_fan(
-                    bands, dataset=state.dataset, variable=variable, season=season
+                    bands, dataset=state.dataset, variable=variable,
+                    season=season, dataset_label=state.dataset,
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
     elif view == "Load Composition":
-        fig = build_stacked_bar(features, season=state.season, dataset_label=state.dataset)
+        st.markdown(f"##### {stacked_bar_title(ctx)}")
+        fig = build_stacked_bar(
+            features, season=state.season, dataset_label=state.dataset
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     elif view == "Historical Lag Correlation":
@@ -257,10 +298,14 @@ def render_story1(
                 else sorted(lag.season.unique().tolist())
             )
             for season in seasons:
+                lag_ctx = TitleContext(
+                    dataset=state.dataset, season=season,
+                    start=state.start, end=state.end,
+                    variable=variable, n_samples=len(features),
+                )
+                st.markdown(f"##### {lag_heatmap_title(lag_ctx)}")
                 fig = build_lag_heatmap(
-                    lag,
-                    dataset=state.dataset,
-                    season=season,
+                    lag, dataset=state.dataset, season=season,
                     dataset_label=state.dataset,
                 )
                 st.plotly_chart(fig, use_container_width=True)
@@ -302,6 +347,12 @@ def _render_story2_kpis(
     features: pd.DataFrame, events: pd.DataFrame | None
 ) -> None:
     metrics = compute_safety_kpis(features, events)
+    _render_story2_kpis_from_dict(features, metrics)
+
+
+def _render_story2_kpis_from_dict(
+    features: pd.DataFrame, metrics: dict
+) -> None:
     c1, c2, c3, c4, c5 = st.columns(5)
     c1.metric("🔥 OT Max", _fmt_float(metrics.get("max_ot"), suffix=" °C"))
     c2.metric("⚠️ Warning DH (≥85°C)", _fmt_float(metrics.get("warning_degree_hours"), suffix=" °C·h"))
@@ -356,14 +407,30 @@ def render_story2(
     # Resolve load variable for LOESS/scatter (OT is not a load branch)
     load_var = variable if variable in LOAD_BRANCHES else "HUFL"
 
+    # Build shared title context with safety KPIs + events evidence
+    safety_kpis = compute_safety_kpis(features, events)
+    ctx = build_context(
+        state.dataset, state.season, state.start, state.end,
+        variable, len(features),
+        safety_kpis=safety_kpis,
+        events=events,
+    )
+
     if view == "OT Threshold & Events":
-        fig_ot = build_ot_threshold_chart(features, events)
+        st.markdown(f"##### {ot_threshold_title(ctx)}")
+        fig_ot = build_ot_threshold_chart(
+            features, events, dataset_label=state.dataset
+        )
         st.plotly_chart(fig_ot, use_container_width=True)
-        fig_rug = build_barcode_rug(events)
+        st.markdown(f"##### {barcode_rug_title(ctx)}")
+        fig_rug = build_barcode_rug(events, dataset_label=state.dataset)
         st.plotly_chart(fig_rug, use_container_width=True)
 
     elif view == "Synchronized Small Multiples":
-        fig = build_small_multiples(features, events, dataset_label=state.dataset)
+        st.markdown(f"##### {small_multiples_title(ctx)}")
+        fig = build_small_multiples(
+            features, events, dataset_label=state.dataset
+        )
         st.plotly_chart(fig, use_container_width=True)
 
     elif view == "Historical LOESS Scatter":
@@ -384,6 +451,7 @@ def render_story2(
                 "LOESS reference curves not found — run the offline engine "
                 "to generate `loess_curves.parquet`. Scatter plot shown without curve."
             )
+        st.markdown(f"##### {loess_scatter_title(ctx, load_variable=load_var)}")
         fig = build_scatter_loess(
             features,
             load_variable=load_var,
@@ -394,6 +462,7 @@ def render_story2(
         st.plotly_chart(fig, use_container_width=True)
 
     elif view == "Thermal Regime Boxplots":
+        st.markdown(f"##### {regime_boxplots_title(ctx)}")
         fig = build_regime_boxplots(
             features, variable=variable, dataset_label=state.dataset
         )
