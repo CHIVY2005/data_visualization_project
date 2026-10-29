@@ -23,7 +23,7 @@ from src.analysis.common import (
 )
 from src.data.constants import (
     DEFAULT_FEATURE_PATH,
-    DEFAULT_LAG_MATRIX_PATH,
+    DEFAULT_LAG_JSON_PATH,
     LOAD_BRANCHES,
     SEED,
 )
@@ -192,12 +192,12 @@ def _coerce_lag_matrix(frame: pd.DataFrame) -> pd.DataFrame:
 
 def save_lag_matrix(
     frame: pd.DataFrame,
-    out: Path | str = DEFAULT_LAG_MATRIX_PATH,
+    out: Path | str,
     *,
     source_hash: str,
     source_path: Path | str | None = None,
 ) -> Path:
-    """Build and save the T0202 lag_matrix.parquet artifact atomically."""
+    """Explicit legacy export for compatibility; not used by the engine or UI."""
     matrix = build_lag_matrix(frame)
     metadata = metadata_bytes(
         "lag_matrix",
@@ -236,23 +236,23 @@ def save_lag_envelope(
 
 def export_lag_correlation_artifact(
     input_path: Path | str = DEFAULT_FEATURE_PATH,
-    out: Path | str = DEFAULT_LAG_MATRIX_PATH,
+    out: Path | str = DEFAULT_LAG_JSON_PATH,
 ) -> dict[str, str]:
     """Export lag correlations from a clean/features source path."""
     set_seed(SEED)
     source = Path(input_path)
     frame = load_feature_input(source)
-    output = save_lag_matrix(
+    output = save_lag_envelope(
         frame, out, source_hash=file_sha256(source), source_path=source,
     )
-    return {"lag_matrix": str(output)}
+    return {"lag_correlation_matrix": str(output)}
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     """CLI entry point for T0202 lag-correlation artifact."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, default=DEFAULT_FEATURE_PATH)
-    parser.add_argument("--out", type=Path, default=DEFAULT_LAG_MATRIX_PATH)
+    parser.add_argument("--out", type=Path, default=DEFAULT_LAG_JSON_PATH)
     args = parser.parse_args(argv)
     try:
         print(json.dumps(export_lag_correlation_artifact(args.input, args.out)))

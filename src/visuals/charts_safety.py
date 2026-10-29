@@ -8,7 +8,7 @@ Implements:
 
 Input contract:
   - grid_features.parquet for OT Threshold Chart
-  - breach_events.parquet for Barcode Rug Plot & shaded spans
+  - thermal_breach_events.parquet for Barcode Rug Plot & shaded spans
 Output:
   - plotly.graph_objects.Figure — CPU-only, responsive, <2s render SLA.
 """

@@ -9,7 +9,7 @@ Implements:
 
 Input contract:
   - grid_features.parquet for Small Multiples, Scatter + LOESS, Regime Boxplots
-  - breach_events.parquet for thermal breach intervals and stress metrics
+  - thermal_breach_events.parquet for thermal breach intervals and stress metrics
 Output:
   - plotly.graph_objects.Figure — interactive shared-axis zoom/pan, <2s render SLA.
 """

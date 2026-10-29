@@ -9,7 +9,7 @@ Implements:
 Input contract:
   - grid_features.parquet for Calendar Heatmap
   - load_profiles_stl.parquet for STL Panels
-  - hourly_quantiles.parquet / quantile_bands.parquet for Quantile Fan Chart
+  - quantile_bands.parquet for Quantile Fan Chart
 Output:
   - plotly.graph_objects.Figure — CPU-only, no Streamlit dependency, <2s render SLA.
 """

@@ -33,6 +33,7 @@ Governance [AGENTS v2.0]:
 
 from __future__ import annotations
 
+import json
 import math
 from pathlib import Path
 
@@ -42,6 +43,7 @@ import streamlit as st
 from src.data.constants import (
     ARTIFACTS_DIR,
     DEFAULT_FEATURE_PATH,
+    DEFAULT_LAG_JSON_PATH,
     LOAD_BRANCHES,
     MEASUREMENTS,
 )
@@ -79,6 +81,7 @@ from src.visuals.filters import (
     filter_features,
     filter_profiles,
 )
+from src.visuals.lag_artifact import lag_envelope_frame
 
 # ---------------------------------------------------------------------------
 # Artifact paths (canonical names per AGENTS v2.0)
@@ -87,7 +90,7 @@ from src.visuals.filters import (
 _PATH_FEATURES = DEFAULT_FEATURE_PATH
 _PATH_STL = ARTIFACTS_DIR / "load_profiles_stl.parquet"
 _PATH_QUANTILE_BANDS = ARTIFACTS_DIR / "quantile_bands.parquet"
-_PATH_LAG_MATRIX = ARTIFACTS_DIR / "lag_matrix.parquet"
+_PATH_LAG_MATRIX = DEFAULT_LAG_JSON_PATH
 _PATH_EVENTS = ARTIFACTS_DIR / "thermal_breach_events.parquet"
 _PATH_LOESS = ARTIFACTS_DIR / "loess_curves.parquet"
 
@@ -96,7 +99,7 @@ _PATH_LOESS = ARTIFACTS_DIR / "loess_curves.parquet"
 # ---------------------------------------------------------------------------
 
 
-def _artifact_version(path: Path) -> tuple[int, int]:
+def artifact_version(path: Path) -> tuple[int, int]:
     """Return (mtime_ns, size) as an immutable cache key."""
     try:
         stat = path.stat()
@@ -106,15 +109,22 @@ def _artifact_version(path: Path) -> tuple[int, int]:
 
 
 @st.cache_data(show_spinner=False)
-def _load_parquet(path: str, version: tuple[int, int]) -> pd.DataFrame:
+def load_parquet(path: str, version: tuple[int, int]) -> pd.DataFrame:
     """Cache by path identity and version; no underscore args (all participate in hashing)."""
     return pd.read_parquet(path)
 
 
 @st.cache_data(show_spinner=False)
-def _load_stl(path: str, version: tuple[int, int]) -> pd.DataFrame:
+def load_stl(path: str, version: tuple[int, int]) -> pd.DataFrame:
     """Dedicated loader for STL artifact to keep its own cache slot."""
     return pd.read_parquet(path)
+
+
+@st.cache_data(show_spinner=False)
+def load_lag_json(path: str, version: tuple[int, int]) -> pd.DataFrame:
+    """Read a saved canonical envelope; reshape only, never fit correlations."""
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    return lag_envelope_frame(payload)
 
 
 def _read_artifact(
@@ -138,8 +148,10 @@ def _read_artifact(
                 icon="📂",
             )
         return None
-    version = _artifact_version(path)
-    loader = _load_stl if stl else _load_parquet
+    version = artifact_version(path)
+    loader = load_stl if stl else load_parquet
+    if path.suffix == ".json":
+        loader = load_lag_json
     df = loader(str(path.resolve()), version)
     if df is None or df.empty:
         if not silent:
@@ -291,7 +303,7 @@ def render_story1(
         st.plotly_chart(fig, use_container_width=True)
 
     elif view == "Historical Lag Correlation":
-        lag = _read_artifact(_PATH_LAG_MATRIX, label="lag_matrix")
+        lag = _read_artifact(_PATH_LAG_MATRIX, label="lag_correlation_matrix")
         if lag is not None:
             seasons = (
                 [state.season] if state.season

@@ -203,7 +203,7 @@ def save_thermal_breach_events(
     source_hash: str,
     source_path: Path | str | None = None,
 ) -> Path:
-    """Build and save the T0203 breach_events.parquet artifact."""
+    """Build and save the canonical thermal_breach_events.parquet artifact."""
     events = build_thermal_breach_events(frame)
     metadata = metadata_bytes(
         "thermal_breach_events",

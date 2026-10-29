@@ -8,7 +8,7 @@ Implements:
 
 Input contract:
   - grid_features.parquet for Stacked Bar
-  - lag_matrix.parquet / lag_correlation_matrix.json for Lag Heatmap
+  - lag_correlation_matrix.json via the lightweight lag adapter for Lag Heatmap
 Output:
   - plotly.graph_objects.Figure — CPU-only, clean Tufte aesthetics, <2s render SLA.
 """

@@ -10,7 +10,7 @@ from typing import Sequence
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.analysis.lag_correlation import save_lag_matrix, save_lag_envelope
+from src.analysis.lag_correlation import save_lag_envelope
 from src.analysis.load_profiling import save_hourly_quantiles, save_load_profiles_stl
 from src.analysis.diagnostics import save_diagnostics
 from src.analysis.common import file_sha256, load_feature_input, set_seed
@@ -19,7 +19,7 @@ from src.data.constants import (
     DEFAULT_FEATURE_PATH,
     DEFAULT_BREACH_EVENTS_PATH,
     DEFAULT_HOURLY_QUANTILES_PATH,
-    DEFAULT_LAG_MATRIX_PATH,
+    DEFAULT_LAG_JSON_PATH,
     SEED,
 )
 
@@ -45,14 +45,8 @@ def run_engine(
             source_hash=digest,
             source_path=source,
         ),
-        "lag_matrix": save_lag_matrix(
-            frame,
-            directory / DEFAULT_LAG_MATRIX_PATH.name,
-            source_hash=digest,
-            source_path=source,
-        ),
         "lag_correlation_matrix": save_lag_envelope(
-            frame, directory / "lag_correlation_matrix.json",
+            frame, directory / DEFAULT_LAG_JSON_PATH.name,
             source_hash=digest, source_path=source,
         ),
         "thermal_breach_events": save_thermal_breach_events(
