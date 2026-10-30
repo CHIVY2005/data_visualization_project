@@ -313,7 +313,7 @@ def save_thermal_breach_events(
     events = build_thermal_breach_events(frame)
     metadata = metadata_bytes(
         "thermal_breach_events",
-        dataset_names(events) if not events.empty else dataset_names(build_grid_features(frame)),
+        dataset_names(frame),
         source_hash,
         {
             "thresholds_c": [WARNING_TEMP_THRESHOLD, CRITICAL_TEMP_THRESHOLD],

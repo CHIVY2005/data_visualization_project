@@ -1,6 +1,6 @@
 """Read-only ETT ingestion and atomic export of the clean v2.0 contract.
 
-Each invocation replaces one dataset artifact; it never appends other datasets.
+Each invocation replaces an explicit single/all-dataset snapshot; never appends.
 Missing measurements remain null (no implicit interpolation or future filling).
 """
 
@@ -251,13 +251,54 @@ def run_pipeline(
     }
 
 
+def run_multi_pipeline(
+    raw_dir: Path | str = ROOT / "data/raw",
+    out_path: Path | str = ROOT / "data/processed/clean_ett.parquet",
+) -> dict[str, Any]:
+    """Validate three independent sequences before atomic combined replacement."""
+    from src.analysis.common import (
+        atomic_write_parquet, metadata_bytes, raw_provenance, set_seed,
+    )
+
+    set_seed()
+    directory = Path(raw_dir).resolve()
+    output = validate_output_path(Path(out_path), directory)
+    provenance = raw_provenance(directory)
+    pieces, audits = [], {}
+    for dataset in CADENCE_MINUTES:
+        frame, metadata = load_clean_dataset(directory / f"{dataset}.csv", dataset)
+        validate_clean_frame(frame, dataset)
+        if metadata["source_hash"] != provenance["raw_source_hashes"][dataset]:
+            raise ValueError("Raw changed while preparing snapshot")
+        pieces.append(frame)
+        audits[dataset] = json.loads(metadata["quality_audit"])
+    combined = pd.concat(pieces, ignore_index=True)
+    metadata = metadata_bytes(
+        "clean_ett", sorted(CADENCE_MINUTES), provenance["raw_bundle_hash"],
+        {"cadence_minutes": CADENCE_MINUTES,
+         "missing_policy": "preserve_null_no_imputation",
+         "merge_policy": "dataset_key_no_resampling"},
+        {"rows": len(combined), "by_dataset": audits},
+    )
+    metadata.update({
+        b"source_hash_algorithm": provenance["raw_bundle_algorithm"].encode(),
+        b"raw_source_hashes": json.dumps(provenance["raw_source_hashes"], sort_keys=True).encode(),
+        b"raw_bundle_hash": provenance["raw_bundle_hash"].encode(),
+        b"raw_bundle_algorithm": provenance["raw_bundle_algorithm"].encode(),
+    })
+    table = pa.Table.from_pandas(combined, schema=CLEAN_SCHEMA, preserve_index=False)
+    atomic_write_parquet(table.replace_schema_metadata(metadata), output)
+    return {"status": "SUCCESS", "output": str(output), "rows": len(combined),
+            "dataset_rows": combined.groupby("dataset").size().to_dict()}
+
+
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
-    """Parse the single-dataset v2.0 CLI contract."""
+    """Parse explicit single/all-dataset v2.0 snapshot selection."""
     parser = argparse.ArgumentParser(
         description="Export physical ETT measurements using clean schema v2.0.",
-        epilog="Each invocation replaces one dataset; no implicit append/merge.",
+        epilog="Each invocation replaces the selected single/all snapshot; never appends.",
     )
-    parser.add_argument("--data", choices=tuple(CADENCE_MINUTES), default="ETTh1")
+    parser.add_argument("--data", choices=(*CADENCE_MINUTES, "all"), default="ETTh1")
     parser.add_argument("--raw_dir", type=Path, default=ROOT / "data" / "raw")
     parser.add_argument(
         "--out", type=Path,
@@ -271,7 +312,9 @@ def main(argv: Sequence[str] | None = None) -> int:
     logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
     args = parse_args(argv)
     try:
-        summary = run_pipeline(args.data, args.raw_dir, args.out)
+        runner = run_multi_pipeline if args.data == "all" else run_pipeline
+        summary = (runner(args.raw_dir, args.out) if args.data == "all" else
+                   runner(args.data, args.raw_dir, args.out))
     except (OSError, ValueError, TypeError) as exc:
         LOGGER.error("ETL failed: %s", exc)
         return 1

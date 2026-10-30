@@ -101,7 +101,8 @@ def atomic_write_json(
             handle.write("\n")
             handle.flush()
             os.fsync(handle.fileno())
-        json.loads(temporary.read_text(encoding="utf-8"))
+        if json.loads(temporary.read_text(encoding="utf-8")) != json.loads(data):
+            raise ValueError("JSON round-trip verification failed")
         safe_output_path(destination, source_path)
         os.replace(temporary, destination)
     finally:
@@ -130,6 +131,48 @@ def metadata_bytes(
         "quality_audit": json.dumps(quality_audit, sort_keys=True, allow_nan=False),
     }
     return {key.encode("utf-8"): value.encode("utf-8") for key, value in metadata.items()}
+
+
+def raw_provenance(raw_dir: Path | str = ROOT / "data/raw") -> dict[str, Any]:
+    """Hash read-only CSV snapshots with LF normalization and explicit aggregation."""
+    from src.data.constants import CADENCE_MINUTES
+
+    sources: dict[str, dict[str, Any]] = {}
+    for dataset in CADENCE_MINUTES:
+        path = Path(raw_dir) / f"{dataset}.csv"
+        data = path.read_bytes()
+        sources[dataset] = {
+            "path": str(path.resolve()), "bytes": len(data),
+            "sha256_bytes": hashlib.sha256(data).hexdigest(),
+            "sha256_lf_normalized": hashlib.sha256(
+                data.replace(b"\r\n", b"\n"),
+            ).hexdigest(),
+        }
+    hashes = {d: entry["sha256_lf_normalized"] for d, entry in sources.items()}
+    digest = hashlib.sha256(json.dumps(hashes, sort_keys=True).encode()).hexdigest()
+    return {"raw_sources": sources, "raw_source_hashes": hashes,
+            "raw_bundle_hash": digest,
+            "raw_bundle_algorithm": "sha256_sorted_json_dataset_to_lf_normalized_sha256"}
+
+
+def attach_raw_lineage(
+    paths: Sequence[Path | str], provenance: Mapping[str, Any],
+) -> None:
+    """Add explicit raw ancestry to Parquet without changing immediate source_hash."""
+    for value in paths:
+        path = Path(value)
+        if path.suffix != ".parquet":
+            continue
+        table = pq.read_table(path)
+        metadata = dict(table.schema.metadata or {})
+        metadata.update({
+            b"raw_source_hashes": json.dumps(
+                provenance["raw_source_hashes"], sort_keys=True,
+            ).encode(),
+            b"raw_bundle_hash": str(provenance["raw_bundle_hash"]).encode(),
+            b"raw_bundle_algorithm": str(provenance["raw_bundle_algorithm"]).encode(),
+        })
+        atomic_write_parquet(table.replace_schema_metadata(metadata), path)
 
 
 def load_feature_input(path: Path | str) -> pd.DataFrame:
