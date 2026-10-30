@@ -449,11 +449,9 @@ def render_story2(
         curves = _read_artifact(_PATH_LOESS, label="loess_curves", silent=True)
         reference: pd.DataFrame | None = None
         if curves is not None:
-            season_key = state.season or "All"
             mask = (
                 curves.dataset.eq(state.dataset)
-                & curves.load_variable.eq(load_var)
-                & curves.season.eq(season_key)
+                & curves.load_feature.eq(load_var)
             )
             reference = curves.loc[mask]
             if reference.empty:
@@ -470,6 +468,10 @@ def render_story2(
             loess_df=reference,
             dataset_label=state.dataset,
             season=state.season,
+            thermal_regime=st.selectbox(
+                "LOESS reference scope", ["All", "Normal", "Warning", "Critical"],
+                help="Regime reference is full-history, not season×regime or date refit.",
+            ),
         )
         st.plotly_chart(fig, use_container_width=True)
 

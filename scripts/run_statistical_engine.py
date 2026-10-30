@@ -14,12 +14,15 @@ from src.analysis.lag_correlation import save_lag_envelope
 from src.analysis.load_profiling import save_hourly_quantiles, save_load_profiles_stl
 from src.analysis.diagnostics import save_diagnostics
 from src.analysis.common import file_sha256, load_feature_input, set_seed
-from src.analysis.thermal_risk import save_thermal_breach_events, build_thermal_breach_events
+from src.analysis.thermal_risk import (
+    save_thermal_breach_events, build_thermal_breach_events, save_loess_curves,
+)
 from src.data.constants import (
     DEFAULT_FEATURE_PATH,
     DEFAULT_BREACH_EVENTS_PATH,
     DEFAULT_HOURLY_QUANTILES_PATH,
     DEFAULT_LAG_JSON_PATH,
+    DEFAULT_LOESS_PATH,
     SEED,
 )
 
@@ -35,6 +38,10 @@ def run_engine(
     digest = file_sha256(source)
     directory = Path(out_dir)
     outputs = {
+        "loess_curves": save_loess_curves(
+            frame, directory / DEFAULT_LOESS_PATH.name,
+            source_hash=digest, source_path=source,
+        ),
         "load_profiles_stl": save_load_profiles_stl(
             frame, directory / "load_profiles_stl.parquet",
             source_hash=digest, source_path=source,
@@ -59,6 +66,7 @@ def run_engine(
     outputs.update(save_diagnostics(
         frame, build_thermal_breach_events(frame), directory,
         source_hash=digest, source_path=source,
+        include_loess=False,
     ))
     return {key: str(value) for key, value in outputs.items()}
 

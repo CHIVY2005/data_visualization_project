@@ -241,8 +241,10 @@ class TestT0402ScatterLoess:
         pytest.importorskip("plotly")
         df = _feature_frame(100)
         precomputed = pd.DataFrame({
-            "HUFL": np.linspace(10, 20, 30),
-            "loess_ot": np.linspace(40, 60, 30),
+            "dataset": "ETTh1", "load_feature": "HUFL",
+            "scope_type": "all", "scope_value": "ALL",
+            "x_load": np.linspace(10, 20, 30),
+            "y_ot_smooth": np.linspace(40, 60, 30), "sample_count": 100,
         })
         fig = build_scatter_loess(df, load_variable="HUFL", loess_df=precomputed)
         trend_trace = [t for t in fig.data if "LOESS" in t.name][0]

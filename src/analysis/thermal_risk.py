@@ -11,6 +11,7 @@ from typing import Sequence
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from statsmodels.nonparametric.smoothers_lowess import lowess
 
 from src.analysis.common import (
     atomic_write_parquet,
@@ -25,12 +26,117 @@ from src.data.constants import (
     CRITICAL_TEMP_THRESHOLD,
     DEFAULT_BREACH_EVENTS_PATH,
     DEFAULT_FEATURE_PATH,
+    DEFAULT_LOESS_PATH,
     LOAD_BRANCHES,
+    LOESS_FRAC,
+    LOESS_GRID_POINTS,
+    LOESS_ITERATIONS,
+    LOESS_MIN_SAMPLES,
+    LOESS_REGIMES,
     WARNING_TEMP_THRESHOLD,
 )
 from src.data.feature_builder import build_grid_features
 
 ZSCORE_COLUMNS = tuple(f"{variable}_z_score" for variable in LOAD_BRANCHES)
+LOESS_SCHEMA = pa.schema([
+    pa.field("dataset", pa.string(), nullable=False),
+    pa.field("load_feature", pa.string(), nullable=False),
+    pa.field("scope_type", pa.string(), nullable=False),
+    pa.field("scope_value", pa.string(), nullable=False),
+    pa.field("x_load", pa.float32(), nullable=False),
+    pa.field("y_ot_smooth", pa.float32(), nullable=False),
+    pa.field("sample_count", pa.int32(), nullable=False),
+])
+
+
+def compute_loess_curves(
+    df: pd.DataFrame, frac: float = LOESS_FRAC,
+    n_grid: int = LOESS_GRID_POINTS,
+) -> pd.DataFrame:
+    """Fit six independent load–OT LOWESS references offline on finite pairs.
+
+    Scopes are separate all/season/regime views, not season×regime fits.
+    Full observations (including repeated loads) enter each fit. Only the
+    resulting coordinates are interpolated to a compact evenly spaced grid.
+    """
+    if not np.isfinite(frac) or not 0 < frac <= 1:
+        raise ValueError("frac must be finite and in (0, 1]")
+    if type(n_grid) is not int or not 100 <= n_grid <= 200:
+        raise ValueError("n_grid must be an integer between 100 and 200")
+    set_seed()
+    features = build_grid_features(df)
+    rows: list[dict[str, object]] = []
+    for dataset, group in features.groupby("dataset", sort=True):
+        scopes: list[tuple[str, str, pd.DataFrame]] = [("all", "ALL", group)]
+        scopes.extend(("season", str(season), sub) for season, sub in
+                      group.groupby("season", sort=True))
+        scopes.extend(("thermal_regime", regime,
+                       group.loc[group.thermal_regime.eq(regime)])
+                      for regime in LOESS_REGIMES)
+        for scope_type, scope_value, subset in scopes:
+            for variable in LOAD_BRANCHES:
+                pairs = subset[[variable, "OT"]].replace(
+                    [np.inf, -np.inf], np.nan,
+                ).dropna().astype("float64").sort_values(
+                    [variable, "OT"], kind="stable",
+                )
+                if (len(pairs) < LOESS_MIN_SAMPLES or
+                        pairs[variable].nunique() < 2 or pairs.OT.nunique() < 2):
+                    continue
+                curve = lowess(
+                    endog=pairs.OT.to_numpy(), exog=pairs[variable].to_numpy(),
+                    frac=frac, it=LOESS_ITERATIONS, return_sorted=True,
+                )
+                if not np.isfinite(curve).all():
+                    continue
+                # Repeated x values remain weighted in fitting, not interpolation.
+                knots = pd.DataFrame(curve, columns=["x", "y"]).groupby(
+                    "x", sort=True,
+                ).y.mean()
+                grid = np.linspace(knots.index.min(), knots.index.max(), n_grid)
+                smooth = np.interp(grid, knots.index.to_numpy(), knots.to_numpy())
+                grid32, smooth32 = grid.astype("float32"), smooth.astype("float32")
+                if not (np.isfinite(grid32).all() and np.isfinite(smooth32).all()):
+                    continue
+                for x, y in zip(grid32, smooth32):
+                    rows.append({
+                        "dataset": str(dataset), "load_feature": variable,
+                        "scope_type": scope_type, "scope_value": scope_value,
+                        "x_load": x, "y_ot_smooth": y,
+                        "sample_count": len(pairs),
+                    })
+    return pd.DataFrame(rows, columns=LOESS_SCHEMA.names).astype({
+        "dataset": "string", "load_feature": "string", "scope_type": "string",
+        "scope_value": "string", "x_load": "float32",
+        "y_ot_smooth": "float32", "sample_count": "int32",
+    })
+
+
+def save_loess_curves(
+    frame: pd.DataFrame, out: Path | str = DEFAULT_LOESS_PATH, *,
+    source_hash: str, source_path: Path | str | None = None,
+    frac: float = LOESS_FRAC, n_grid: int = LOESS_GRID_POINTS,
+) -> Path:
+    """Atomically export the T0204 seven-column contract with provenance."""
+    curves = compute_loess_curves(frame, frac, n_grid)
+    metadata = metadata_bytes(
+        "loess_curves", dataset_names(frame), source_hash,
+        {"frac": frac, "it": LOESS_ITERATIONS, "grid_points": n_grid,
+         "min_samples": LOESS_MIN_SAMPLES, "fit_sampling": "all_finite_pairs",
+         "scope_types": ["all", "season", "thermal_regime"],
+         "reference_scope": "historical_not_date_range_refit",
+         "zero_variance_policy": "skip_constant_load_or_ot",
+         "grid_policy": "linear_interpolation_of_mean_fitted_y_at_duplicate_x"},
+        {"rows": len(curves),
+         "valid_groups": len(curves) // n_grid,
+         "unsupported_policy": "omit_groups_with_insufficient_or_nonfinite_fit"},
+    )
+    table = pa.Table.from_pandas(
+        curves, schema=LOESS_SCHEMA, preserve_index=False, safe=True,
+    ).replace_schema_metadata(metadata)
+    return atomic_write_parquet(table, out, source_path)
+
+
 THERMAL_BREACH_SCHEMA = pa.schema([
     pa.field("dataset", pa.string(), nullable=False),
     pa.field("event_id", pa.string(), nullable=False),

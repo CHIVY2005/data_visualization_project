@@ -211,6 +211,7 @@ def build_scatter_loess(
     height: int = 450,
     width: int | None = None,
     max_scatter_points: int = 4000,
+    thermal_regime: str | None = None,
 ) -> go.Figure:
     """Build Joint Scatter Plot with overlaid LOESS non-linear curve (T0402b)."""
     fig = go.Figure()
@@ -317,11 +318,32 @@ def build_scatter_loess(
             )
         )
 
-    if loess_df is not None and not loess_df.empty and "loess_ot" in loess_df.columns:
-        smooth_x = loess_df[
-            "load_value" if "load_value" in loess_df else load_variable
-        ].values
-        smooth_y = loess_df["loess_ot"].values
+    curve = loess_df
+    if curve is not None and not curve.empty:
+        required_curve = {
+            "dataset", "load_feature", "scope_type", "scope_value",
+            "x_load", "y_ot_smooth", "sample_count",
+        }
+        if not required_curve.issubset(curve.columns):
+            raise ValueError("Expected T0204 seven-column LOESS artifact")
+        datasets = frame["dataset"].dropna().unique() if "dataset" in frame else []
+        dataset = dataset_label or (str(datasets[0]) if len(datasets) == 1 else "")
+        if not dataset:
+            raise ValueError("Select exactly one dataset for the LOESS reference")
+        scope_type, scope_value = "all", "ALL"
+        if thermal_regime and thermal_regime != "All":
+            scope_type, scope_value = "thermal_regime", thermal_regime
+        elif season:
+            scope_type, scope_value = "season", season
+        curve = curve.loc[
+            curve.dataset.eq(dataset) & curve.load_feature.eq(load_variable)
+            & curve.scope_type.eq(scope_type) & curve.scope_value.eq(scope_value)
+        ].sort_values("x_load")
+    if curve is not None and not curve.empty:
+        smooth_x = curve["x_load"].to_numpy()
+        smooth_y = curve["y_ot_smooth"].to_numpy()
+        if not (np.isfinite(smooth_x).all() and np.isfinite(smooth_y).all()):
+            raise ValueError("LOESS coordinates must be finite")
     else:
         smooth_x, smooth_y = np.array([]), np.array([])
         fig.add_annotation(text="LOESS reference unavailable — run offline engine",
@@ -334,7 +356,7 @@ def build_scatter_loess(
                 x=smooth_x,
                 y=smooth_y,
                 mode="lines",
-                name="Đường hồi quy phi tuyến (LOESS)",
+                name=f"LOESS reference ({scope_type}: {scope_value})",
                 line={"color": _COLOUR_TREND, "width": 2.5},
                 hovertemplate=(
                     f"<b>LOESS Trend</b><br>{load_variable}: %{{x:.2f}}<br>OT kỳ vọng: %{{y:.2f}} °C<extra></extra>"
