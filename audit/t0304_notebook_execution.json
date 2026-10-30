@@ -1,0 +1,32 @@
+{
+ "task": "T0304",
+ "generated_at": "2026-10-30T14:50:01.773413+00:00",
+ "branch": "feat/T0205",
+ "notebooks": {
+  "02_tqh04_statistical_analysis.ipynb": {
+   "code_cells_executed": 7,
+   "errors": 0,
+   "elapsed_seconds": 7.468,
+   "interpreter": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\.venv\\Scripts\\python.exe"
+  },
+  "03_tqh05_insights_visual_storytelling.ipynb": {
+   "code_cells_executed": 7,
+   "errors": 0,
+   "elapsed_seconds": 8.235,
+   "interpreter": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\.venv\\Scripts\\python.exe"
+  }
+ },
+ "input_sha256": {
+  "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\data\\processed\\clean_ett.parquet": "cc17412411b9eb50ee2cced85f8c91ce3d4b9b020eb5d677f1d6975331662a43",
+  "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\data\\processed\\grid_features.parquet": "658ea5815a62a8cf13d0054995b935093e72ae134896192fa1acc496f3f52e25",
+  "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\lag_correlation_matrix.json": "5e5dfd2f9499dc6b05f417505f92c963d3bacebd29eba8cb89c7de4d3eb23f95",
+  "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\load_profiles_stl.parquet": "99d46caefb8d41b001d6079b00754846ac76a5248c8dd64c518e17e38e2f9963",
+  "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\loess_curves.parquet": "c98545abd285bf68350e92776f5ae73e3dffb983022938b79a7bc0454283569f",
+  "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\quantile_bands.parquet": "af0f758e8900f937f8958c93aa3a7d53bee048d17dd7577c4c3a506ee2158981",
+  "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\thermal_breach_events.parquet": "5351bd82f3f88d5714ddced50f3adad64e0567094d266c620b8553a109a811e3"
+ },
+ "protected_files_checked": 12,
+ "protected_unchanged": true,
+ "browser_sla": "NOT_MEASURED",
+ "status": "PASS"
+}
