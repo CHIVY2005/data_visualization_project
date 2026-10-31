@@ -1,0 +1,175 @@
+{
+  "environment": {
+    "python": "3.11.1 (tags/v3.11.1:a7a450f, Dec  6 2022, 19:58:39) [MSC v.1934 64 bit (AMD64)]",
+    "executable": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\.venv\\Scripts\\python.exe",
+    "platform": "Windows-10-10.0.26200-SP0",
+    "processor": "Intel64 Family 6 Model 158 Stepping 9, GenuineIntel",
+    "streamlit": "1.65.0",
+    "pandas": "3.0.6"
+  },
+  "artifacts": {
+    "grid_features": {
+      "path": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\data\\processed\\grid_features.parquet",
+      "bytes": 4022446,
+      "sha256": "658ea5815a62a8cf13d0054995b935093e72ae134896192fa1acc496f3f52e25"
+    },
+    "stl": {
+      "path": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\load_profiles_stl.parquet",
+      "bytes": 17317502,
+      "sha256": "99d46caefb8d41b001d6079b00754846ac76a5248c8dd64c518e17e38e2f9963"
+    },
+    "quantiles": {
+      "path": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\quantile_bands.parquet",
+      "bytes": 53038,
+      "sha256": "af0f758e8900f937f8958c93aa3a7d53bee048d17dd7577c4c3a506ee2158981"
+    },
+    "lag": {
+      "path": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\lag_correlation_matrix.json",
+      "bytes": 28890,
+      "sha256": "5e5dfd2f9499dc6b05f417505f92c963d3bacebd29eba8cb89c7de4d3eb23f95"
+    },
+    "events": {
+      "path": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\thermal_breach_events.parquet",
+      "bytes": 4675,
+      "sha256": "5351bd82f3f88d5714ddced50f3adad64e0567094d266c620b8553a109a811e3"
+    },
+    "loess": {
+      "path": "F:\\Study Materials\\specialized_subject\\Visualization\\Visualization_gr\\data_visualization_project\\output\\artifacts\\loess_curves.parquet",
+      "bytes": 92762,
+      "sha256": "c98545abd285bf68350e92776f5ae73e3dffb983022938b79a7bc0454283569f"
+    }
+  },
+  "loader_six_artifacts": {
+    "cold_seconds": 0.9394327999998495,
+    "warm_seconds": 0.06621379999978672,
+    "cache_hit_returns_equal_frames": true
+  },
+  "dataset_switch_three_datasets": {
+    "runs": 10,
+    "mean_seconds": 0.03711203000011665,
+    "median_seconds": 0.033014900000125635,
+    "min_seconds": 0.028127999999924214,
+    "max_seconds": 0.054817499999899155
+  },
+  "date_season_filter_three_datasets": {
+    "runs": 10,
+    "mean_seconds": 0.02006558999992194,
+    "median_seconds": 0.019963199999892822,
+    "min_seconds": 0.01874069999985295,
+    "max_seconds": 0.021962099999655038
+  },
+  "chart_build_per_view": {
+    "calendar": {
+      "runs": 5,
+      "mean_seconds": 0.12968744000008883,
+      "median_seconds": 0.11019170000008671,
+      "min_seconds": 0.09299190000001545,
+      "max_seconds": 0.23212020000028133
+    },
+    "stacked_bar": {
+      "runs": 5,
+      "mean_seconds": 0.2736225399999057,
+      "median_seconds": 0.26640109999971173,
+      "min_seconds": 0.2376868999999715,
+      "max_seconds": 0.3304753000002165
+    },
+    "lag_heatmap": {
+      "runs": 5,
+      "mean_seconds": 0.08607038000000103,
+      "median_seconds": 0.08508709999978237,
+      "min_seconds": 0.07931210000015199,
+      "max_seconds": 0.09545710000020335
+    },
+    "quantile_fan": {
+      "runs": 5,
+      "mean_seconds": 0.03656326000009358,
+      "median_seconds": 0.035670700000082434,
+      "min_seconds": 0.03368170000021564,
+      "max_seconds": 0.04213549999985844
+    },
+    "stl_panels": {
+      "runs": 5,
+      "mean_seconds": 0.18205542000005154,
+      "median_seconds": 0.17331830000011905,
+      "min_seconds": 0.15334759999996095,
+      "max_seconds": 0.23258020000002944
+    },
+    "ot_threshold": {
+      "runs": 5,
+      "mean_seconds": 0.06270170000007055,
+      "median_seconds": 0.06426190000001952,
+      "min_seconds": 0.05597540000007939,
+      "max_seconds": 0.06804289999990942
+    },
+    "barcode_rug": {
+      "runs": 5,
+      "mean_seconds": 0.008651980000013281,
+      "median_seconds": 0.00925520000009783,
+      "min_seconds": 0.0067969000001539825,
+      "max_seconds": 0.011023499999737396
+    },
+    "small_multiples": {
+      "runs": 5,
+      "mean_seconds": 0.07730573999997432,
+      "median_seconds": 0.07736230000000432,
+      "min_seconds": 0.07537120000006325,
+      "max_seconds": 0.07969339999999647
+    },
+    "loess_scatter": {
+      "runs": 5,
+      "mean_seconds": 0.04368212000017593,
+      "median_seconds": 0.04457230000025447,
+      "min_seconds": 0.0386332000002767,
+      "max_seconds": 0.04716770000004544
+    },
+    "regime_boxplots": {
+      "runs": 5,
+      "mean_seconds": 0.0729142000001957,
+      "median_seconds": 0.07228510000004462,
+      "min_seconds": 0.06908580000026632,
+      "max_seconds": 0.07727180000028966
+    }
+  },
+  "streamlit_apptest_server_side": {
+    "initial_render_seconds": 1.008247499999925,
+    "warm_initial_render_seconds": 0.5035652000001392,
+    "dataset_switch_seconds": [
+      0.1809717000001001,
+      0.16721439999992072,
+      0.21011849999968035
+    ],
+    "role_switch_seconds": [
+      0.21744769999986602,
+      0.20170809999990524,
+      0.22910860000001776
+    ],
+    "variable_switch_seconds": [
+      0.1896219000000201,
+      0.21448899999995774
+    ],
+    "date_range_filter_seconds": 0.17324449999978242,
+    "view_switch_seconds": [
+      0.19900289999986853,
+      0.2479932999999619,
+      0.14679100000012113,
+      0.26736940000000686,
+      0.14203360000010434,
+      0.43622080000022834,
+      0.14869769999995697,
+      0.3801853999998457,
+      0.2589054000000033
+    ],
+    "max_switch_seconds": 0.43622080000022834,
+    "exceptions": 0,
+    "browser_paint_included": false,
+    "network_included": false
+  },
+  "sla_thresholds_seconds": {
+    "stretch_target": 1.5,
+    "project_sla": 2.0,
+    "warm_loader_mean_pass": true,
+    "dataset_switch_mean_pass": true,
+    "filter_mean_pass": true
+  },
+  "scope_note": "Local single-run AppTest excludes browser paint/network. Repeated in-process loader/filter/chart timings are not production concurrency or end-to-end SLA."
+}

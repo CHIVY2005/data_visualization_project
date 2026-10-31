@@ -33,7 +33,6 @@ Governance [AGENTS v2.0]:
 
 from __future__ import annotations
 
-import json
 import math
 from pathlib import Path
 
@@ -81,7 +80,17 @@ from src.visuals.filters import (
     filter_features,
     filter_profiles,
 )
-from src.visuals.lag_artifact import lag_envelope_frame
+from src.visuals.cache_manager import (
+    artifact_version,
+    load_artifact,
+    load_lag_json,
+    load_parquet,
+)
+
+
+def load_stl(path: str, version: tuple[int, int]) -> pd.DataFrame:
+    """Compatibility alias; STL uses the same path/version-aware Parquet cache."""
+    return load_parquet(path, version)
 
 # ---------------------------------------------------------------------------
 # Artifact paths (canonical names per AGENTS v2.0)
@@ -97,34 +106,6 @@ _PATH_LOESS = ARTIFACTS_DIR / "loess_curves.parquet"
 # ---------------------------------------------------------------------------
 # Versioned artifact loaders — cached per (path, mtime_ns, size)
 # ---------------------------------------------------------------------------
-
-
-def artifact_version(path: Path) -> tuple[int, int]:
-    """Return (mtime_ns, size) as an immutable cache key."""
-    try:
-        stat = path.stat()
-        return stat.st_mtime_ns, stat.st_size
-    except OSError:
-        return 0, 0
-
-
-@st.cache_data(show_spinner=False)
-def load_parquet(path: str, version: tuple[int, int]) -> pd.DataFrame:
-    """Cache by path identity and version; no underscore args (all participate in hashing)."""
-    return pd.read_parquet(path)
-
-
-@st.cache_data(show_spinner=False)
-def load_stl(path: str, version: tuple[int, int]) -> pd.DataFrame:
-    """Dedicated loader for STL artifact to keep its own cache slot."""
-    return pd.read_parquet(path)
-
-
-@st.cache_data(show_spinner=False)
-def load_lag_json(path: str, version: tuple[int, int]) -> pd.DataFrame:
-    """Read a saved canonical envelope; reshape only, never fit correlations."""
-    payload = json.loads(Path(path).read_text(encoding="utf-8"))
-    return lag_envelope_frame(payload)
 
 
 def _read_artifact(
@@ -148,11 +129,12 @@ def _read_artifact(
                 icon="📂",
             )
         return None
-    version = artifact_version(path)
-    loader = load_stl if stl else load_parquet
-    if path.suffix == ".json":
-        loader = load_lag_json
-    df = loader(str(path.resolve()), version)
+    try:
+        df = load_artifact(path)
+    except OSError:
+        if not silent:
+            st.warning(f"⚠️ Artifact **{label or path.name}** could not be read.")
+        return None
     if df is None or df.empty:
         if not silent:
             st.info(f"ℹ️ Artifact **{label or path.name}** loaded but contains no rows.")
